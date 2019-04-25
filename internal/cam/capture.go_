@@ -1,0 +1,23 @@
+// package cam
+
+/*
+go func() {
+					println("Exporting")
+					cmd := exec.Command("ffmpeg", "-i", name, "-vcodec", "libx264", "-f", "mp4", "-y", name+".mp4")
+					var stderr bytes.Buffer
+					cmd.Stderr = &stderr
+					err := cmd.Run()
+					if err != nil {
+						println("cmd error")
+						fmt.Println(fmt.Sprint(err) + ": " + stderr.String())
+						return
+					}
+					println("exported")
+					msg := tgbotapi.NewVideoUpload(411400390, name+".mp4")
+					_, err = bot.Send(msg)
+					if err != nil {
+						println(err)
+					}
+
+				}()
+*/
