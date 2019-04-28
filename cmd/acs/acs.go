@@ -18,9 +18,6 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
-	capture, _ := cam.New(0)
-	defer capture.Close()
-
 	chatID, err := strconv.ParseInt(os.Getenv("TELEGRAM_CHAT_ID"), 10, 64)
 	if err != nil {
 		log.Panic(err)
@@ -35,18 +32,22 @@ func main() {
 	u.Timeout = 60
 
 	updates, _ := bot.GetUpdatesChan(u)
-	var camEvents chan cam.CaptureEvent
-	var processEvents chan string
+
+	events := make(chan cam.CaptureEvent)
+	commands := make(chan cam.CaptureCommandType)
+	files := make(chan string)
+
+	go cam.StartSession(0, events, commands)
 
 	for {
 		var msg tgbotapi.Chattable
 
 		select {
-		case process := <-processEvents:
-			println("process events", process)
-			msg = tgbotapi.NewPhotoUpload(chatID, process)
+		case file := <-files:
+			println("new file", file)
+			msg = tgbotapi.NewPhotoUpload(chatID, file)
 
-		case event := <-camEvents:
+		case event := <-events:
 			println("cam event", event.Type)
 
 			switch event.Type {
@@ -54,7 +55,7 @@ func main() {
 				msg = tgbotapi.NewPhotoUpload(chatID, event.File)
 
 			case cam.EventTypeCaptureStopped:
-				capture.Close()
+
 			}
 
 		case update := <-updates:
@@ -67,8 +68,11 @@ func main() {
 			}
 
 			if update.Message.Photo != nil && len(*update.Message.Photo) > 0 {
-				processEvents = make(chan string)
-				go createROI(update.Message.Photo, bot, processEvents)
+				msg, err = createROI(update.Message.Photo, bot, chatID)
+				if err != nil {
+					log.Println(err)
+				}
+				commands <- cam.CaptureCommandTypePreviewROI
 				// os.Remove(file)
 			} else if update.Message.IsCommand() {
 				switch update.Message.Command() {
@@ -82,19 +86,21 @@ func main() {
 				case "setvolume":
 
 				case "enable":
-					camEvents = capture.StartDetection()
+					commands <- cam.CaptureCommandTypeStartDetection
 
 				case "disable":
-					capture.Close()
+					commands <- cam.CaptureCommandTypeStopDetection
 
 				case "capture":
-					capture.TakePhoto()
+					commands <- cam.CaptureCommandTypeTakePhoto
+
+				case "preview":
+					commands <- cam.CaptureCommandTypePreviewROI
 
 				case "createroi":
-					capture.TakePhoto()
-					// msg.Text = "I'm ok."
+					msg = tgbotapi.NewMessage(chatID, "Take following photo and draw over it one or more red polygon. Afterthat, upload your drawing.")
+					commands <- cam.CaptureCommandTypeTakePhoto
 				default:
-					// msg.Text = "I don't know that command"
 				}
 			} else {
 				log.Println("unexpected message type")
@@ -102,20 +108,13 @@ func main() {
 		}
 
 		if msg == nil {
-			// log.Println("msg empty")
 			continue
 		}
 
-		// go func(msg tgbotapi.Chattable) {
 		if _, err := bot.Send(msg); err != nil {
 			log.Panic(err)
 		}
-		// }(msg)
-
 	}
-
-	// var botUpdates chan bot
-
 }
 
 func createHelpMsg(chatID int64) tgbotapi.MessageConfig {
@@ -127,16 +126,17 @@ func createHelpMsg(chatID int64) tgbotapi.MessageConfig {
 	/setvolume - change volume of alarm
 
 	*Watch Control*
-	/enable - start watching of your roi
-	/disable - stop watching of your roi
+	/enable - start watching of your ROI
+	/disable - stop watching of your ROI
 	/capture - just take photo
+	/preview - take photo with ROI overlay
 	/createroi - create Region Of Interest where deetection would be processed`)
 	msg.ParseMode = "Markdown"
 
 	return msg
 }
 
-func createROI(photos *[]tgbotapi.PhotoSize, bot *tgbotapi.BotAPI, channel chan string) {
+func createROI(photos *[]tgbotapi.PhotoSize, bot *tgbotapi.BotAPI, chatID int64) (tgbotapi.MessageConfig, error) {
 	drawPhoto := &(*photos)[0]
 
 	for _, photo := range *photos {
@@ -147,21 +147,23 @@ func createROI(photos *[]tgbotapi.PhotoSize, bot *tgbotapi.BotAPI, channel chan 
 
 	url, _ := bot.GetFileDirectURL(drawPhoto.FileID)
 
-	response, e := http.Get(url)
-	if e != nil {
-		log.Fatal(e)
+	response, err := http.Get(url)
+	if err != nil {
+		return tgbotapi.MessageConfig{}, err
 	}
 	defer response.Body.Close()
 
 	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		log.Fatal(err)
+		return tgbotapi.MessageConfig{}, err
 	}
 
-	file, err := cam.NewMask(data)
+	err = cam.NewMask(data)
 	if err != nil {
-		log.Fatal(err)
+		return tgbotapi.MessageConfig{}, err
 	}
 
-	channel <- file
+	msg := tgbotapi.NewMessage(chatID, "Ok, we parsed your drawing and here you go: your brand new the Region of Intereset")
+
+	return msg, nil
 }

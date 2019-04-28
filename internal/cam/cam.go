@@ -2,6 +2,7 @@ package cam
 
 import (
 	"image"
+	"log"
 	"time"
 
 	"gocv.io/x/gocv"
@@ -17,23 +18,26 @@ const (
 	recordingDuration     = time.Duration(5 * time.Second)
 )
 
-type commandType int
+// CaptureCommandType to set capture state
+type CaptureCommandType int
 
 const (
-	commandTypeClose commandType = iota
-	commandTypeStartRecording
-	commandTypeStopRecording
-	commandTypeCancelRecording
-	commandTypeTakePhoto
-	commandTypeStartDetection
-	commandTypeStopDetection
+	CaptureCommandTypeClose CaptureCommandType = iota
+	CaptureCommandTypeStartRecording
+	CaptureCommandTypeStopRecording
+	CaptureCommandTypeCancelRecording
+	CaptureCommandTypeTakePhoto
+	CaptureCommandTypeStartDetection
+	CaptureCommandTypeStopDetection
+	CaptureCommandTypePreviewROI
 	// CaptureCommand
 )
 
-type captureCommand struct {
-	cmdType commandType
-}
+// type captureCommand struct {
+// 	cmdType commandType
+// }
 
+// EventType show what happens in capture loop
 type EventType int
 
 const (
@@ -55,87 +59,88 @@ type CaptureEvent struct {
 	File string
 }
 
-type CamCapture struct {
-	sourceID    int
-	commandChan chan captureCommand
-	EventsChan  chan CaptureEvent
-	// Events   chan CamChannel
-	// commands	*chan
-}
+// type CamCapture struct {
+// 	sourceID    int
+// 	commandChan chan captureCommand
+// 	EventsChan  chan CaptureEvent
+// 	// Events   chan CamChannel
+// 	// commands	*chan
+// }
 
-func New(source int) (*CamCapture, error) {
-	// window := gocv.NewWindow("Motion Window")
-	// defer window.Close()
+// func New(source int) (*CamCapture, error) {
+// 	// window := gocv.NewWindow("Motion Window")
+// 	// defer window.Close()
 
-	capture := CamCapture{
-		sourceID: source,
-	}
+// 	capture := CamCapture{
+// 		sourceID: source,
+// 	}
 
-	return &capture, nil
-}
+// 	return &capture, nil
+// }
 
-func (c *CamCapture) TakePhoto() chan CaptureEvent {
-	evtChan, cmdChan := c.startSessionIfNeeded()
+// func (c *CamCapture) TakePhoto() chan CaptureEvent {
+// 	evtChan, cmdChan := c.startSessionIfNeeded()
 
-	cmdChan <- captureCommand{commandTypeTakePhoto}
+// 	cmdChan <- captureCommand{commandTypeTakePhoto}
 
-	return evtChan
-}
+// 	return evtChan
+// }
 
-func (c *CamCapture) StartRecording() chan CaptureEvent {
-	evtChan, cmdChan := c.startSessionIfNeeded()
+// func (c *CamCapture) StartRecording() chan CaptureEvent {
+// 	evtChan, cmdChan := c.startSessionIfNeeded()
 
-	cmdChan <- captureCommand{commandTypeStartRecording}
+// 	cmdChan <- captureCommand{commandTypeStartRecording}
 
-	return evtChan
-}
+// 	return evtChan
+// }
 
-func (c *CamCapture) StopRecording() {
-	if c.commandChan == nil {
-		return
-	}
+// func (c *CamCapture) StopRecording() {
+// 	if c.commandChan == nil {
+// 		return
+// 	}
 
-	c.commandChan <- captureCommand{commandTypeStopRecording}
-}
+// 	c.commandChan <- captureCommand{commandTypeStopRecording}
+// }
 
-func (c *CamCapture) CancelRecording() {
-	if c.commandChan == nil {
-		return
-	}
+// func (c *CamCapture) CancelRecording() {
+// 	if c.commandChan == nil {
+// 		return
+// 	}
 
-	c.commandChan <- captureCommand{commandTypeCancelRecording}
-}
+// 	c.commandChan <- captureCommand{commandTypeCancelRecording}
+// }
 
-func (c *CamCapture) StartDetection() chan CaptureEvent {
-	evtChan, cmdChan := c.startSessionIfNeeded()
+// func (c *CamCapture) StartDetection() chan CaptureEvent {
+// 	evtChan, cmdChan := c.startSessionIfNeeded()
 
-	cmdChan <- captureCommand{commandTypeStartDetection}
+// 	cmdChan <- captureCommand{commandTypeStartDetection}
 
-	return evtChan
-}
+// 	return evtChan
+// }
 
 func createCaptureFilename(ext string) string {
 	return time.Now().Format("2006-01-02T15-04-05") + ext
 }
 
-func (c *CamCapture) startSessionIfNeeded() (chan CaptureEvent, chan captureCommand) {
-	if c.commandChan != nil && c.EventsChan != nil {
-		return c.EventsChan, c.commandChan
-	}
+// func (c *CamCapture) startSessionIfNeeded() (chan CaptureEvent, chan captureCommand) {
+// 	if c.commandChan != nil && c.EventsChan != nil {
+// 		return c.EventsChan, c.commandChan
+// 	}
 
-	ca := make(chan CaptureEvent, 20)
-	cmd := make(chan captureCommand, 20)
+// 	ca := make(chan CaptureEvent, 20)
+// 	cmd := make(chan captureCommand, 20)
 
-	c.commandChan = cmd
-	c.EventsChan = ca
+// 	c.commandChan = cmd
+// 	c.EventsChan = ca
 
-	go startSession(c.sourceID, ca, cmd)
+// 	go startSession(c.sourceID, ca, cmd)
 
-	return ca, cmd
-}
+// 	return ca, cmd
+// }
 
-func startSession(s int, c chan CaptureEvent, cmd chan captureCommand) {
-	webcam, err := gocv.OpenVideoCapture(s)
+// StartSession start capture loop. If no commands send, loop is idle
+func StartSession(sourceID int, evtChan chan CaptureEvent, cmdChan chan CaptureCommandType) {
+	webcam, err := gocv.OpenVideoCapture(sourceID)
 	if err != nil {
 		return
 	}
@@ -169,40 +174,51 @@ func startSession(s int, c chan CaptureEvent, cmd chan captureCommand) {
 
 	takePhoto := false
 	detectionEnabled := false
+	previewROI := false
 
 	defer func() {
-		c <- CaptureEvent{Type: EventTypeCaptureStopped}
+		evtChan <- CaptureEvent{Type: EventTypeCaptureStopped}
 		// if writer != nil {
 		// 	println("writer closed")
 		// 	writer.Close()
 		// }
 	}()
 
-	c <- CaptureEvent{Type: EventTypeCaptureStarted}
+	evtChan <- CaptureEvent{Type: EventTypeCaptureStarted}
 	for {
 		select {
-		case com := <-cmd:
-			println("command", com.cmdType)
-			switch com.cmdType {
-			case commandTypeClose:
+		case cmd := <-cmdChan:
+			println("command", cmd)
+			switch cmd {
+			case CaptureCommandTypeClose:
 
 				return
 
-			case commandTypeTakePhoto:
+			case CaptureCommandTypeTakePhoto:
 				takePhoto = true
 
-			case commandTypeStartDetection:
+			case CaptureCommandTypeStartDetection:
 				detectionEnabled = true
 
-			case commandTypeStopDetection:
+			case CaptureCommandTypeStopDetection:
 				detectionEnabled = false
+
+				zeros := gocv.NewMat()
+				zeros.CopyTo(&img)
+				zeros.CopyTo(&imgDelta)
+				zeros.CopyTo(&imgThresh)
+
+			case CaptureCommandTypePreviewROI:
+				previewROI = true
+
 			default:
 			}
 		default:
 		}
 
-		if !takePhoto && !detectionEnabled {
-			break
+		if !takePhoto && !detectionEnabled && !previewROI {
+			time.Sleep(time.Millisecond * 100)
+			continue
 		}
 
 		if ok := webcam.Read(&imgRaw); !ok {
@@ -213,27 +229,44 @@ func startSession(s int, c chan CaptureEvent, cmd chan captureCommand) {
 			continue
 		}
 
+		if previewROI {
+			previewROI = false
+
+			file := createCaptureFilename(".png")
+			imgMask = gocv.IMRead("mask.png", gocv.IMReadGrayScale)
+
+			previewMask := gocv.NewMat()
+			defer previewMask.Close()
+
+			preview := gocv.NewMat()
+			defer preview.Close()
+
+			previewROI := gocv.NewMat()
+			defer previewROI.Close()
+
+			gocv.CvtColor(imgMask, &previewMask, gocv.ColorGrayToBGR)
+			gocv.BitwiseAnd(imgRaw, previewMask, &previewROI)
+			gocv.AddWeighted(imgRaw, 0.3, previewROI, 1, 1, &preview)
+			gocv.IMWrite(file, preview)
+
+			gocv.Resize(imgMask, &imgMask, image.Pt(0, 0), 0.5, 0.5, 1)
+
+			evtChan <- CaptureEvent{
+				Type: EventTypePhotoAvailable,
+				File: file}
+		}
+
 		if takePhoto {
-			println("take photo is true")
 			takePhoto = false
-			img := gocv.NewMat()
-			imgRaw.CopyTo(&img)
-			println("copied photo")
-			go func(c chan CaptureEvent, img gocv.Mat) {
-				file := createCaptureFilename(".png")
-				gocv.IMWrite(file, img)
-				println("photos saved")
-				img.Close()
-				println("photo closed")
-				c <- CaptureEvent{
-					Type: EventTypePhotoAvailable,
-					File: file}
-				println("event sent")
-			}(c, img)
+			file := createCaptureFilename(".png")
+			gocv.IMWrite(file, imgRaw)
+
+			evtChan <- CaptureEvent{
+				Type: EventTypePhotoAvailable,
+				File: file}
 		}
 
 		if detectionEnabled {
-
 			gocv.Resize(imgRaw, &imgRaw, image.Pt(0, 0), 0.5, 0.5, 1)
 			gocv.CvtColor(imgRaw, &img, gocv.ColorRGBToGray)
 			gocv.BitwiseAnd(img, imgMask, &img)
@@ -244,19 +277,19 @@ func startSession(s int, c chan CaptureEvent, cmd chan captureCommand) {
 			kernel := gocv.GetStructuringElement(gocv.MorphRect, image.Pt(3, 3))
 			defer kernel.Close()
 			gocv.Dilate(imgThresh, &imgThresh, kernel)
+
+			contours := gocv.FindContours(imgThresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
+
+			for _, contour := range contours {
+				area := gocv.ContourArea(contour)
+				if area < MinimumArea {
+					continue
+				}
+
+				evtChan <- CaptureEvent{Type: EventTypeDetection}
+				break
+			}
 		}
-
-		// contours := gocv.FindContours(imgThresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
-
-		// for _, contour := range contours {
-		// 	area := gocv.ContourArea(contour)
-		// 	if area < MinimumArea {
-		// 		continue
-		// 	}
-
-		// 	// c <- CaptureEvent{Type: EventTypeDetection}
-		// 	break
-		// }
 
 		// now find contours
 		// found := detectionAlarmed
@@ -362,20 +395,22 @@ func startSession(s int, c chan CaptureEvent, cmd chan captureCommand) {
 
 }
 
-func (c *CamCapture) Close() {
-	if c.commandChan == nil {
-		return
-	}
+// func (c *CamCapture) Close() {
+// 	if c.commandChan == nil {
+// 		return
+// 	}
 
-	// c.commands <- CommandChannel{}
-	close(c.commandChan)
-	c.commandChan = nil
-}
+// 	// c.commands <- CommandChannel{}
+// 	close(c.commandChan)
+// 	c.commandChan = nil
+// }
 
-func NewMask(buf []byte) (string, error) {
+// NewMask creates new roi from given buffer with red areas
+func NewMask(buf []byte) error {
+	log.Println("creating mask")
 	draw, err := gocv.IMDecode(buf, gocv.IMReadUnchanged)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer draw.Close()
 
@@ -387,9 +422,7 @@ func NewMask(buf []byte) (string, error) {
 
 	createMask(draw, draw, &mask, &preview)
 
-	file := createCaptureFilename(".png")
-
-	gocv.IMWrite(file, preview)
-
-	return file, nil
+	gocv.IMWrite("mask.png", mask)
+	log.Println("created mask")
+	return nil
 }
