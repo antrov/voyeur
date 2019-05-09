@@ -2,28 +2,25 @@ package cam
 
 import (
 	"image"
+	"image/color"
 	"log"
+	"os"
 	"time"
 
 	"gocv.io/x/gocv"
 )
 
-const MinimumArea = 300
-
 const (
-	cancellationThreshold = time.Duration(500 * time.Millisecond)
-	detectionThreshold    = time.Duration(100 * time.Millisecond)
-	alarmThreshold        = time.Duration(1 * time.Second)
-	waitDuration          = time.Duration(1 * time.Minute)
-	recordingDuration     = time.Duration(5 * time.Second)
+	detectionMinArea = 10
+	detectionMaxArea = 50
 )
 
 // CaptureCommandType to set capture state
 type CaptureCommandType int
 
 const (
-	CaptureCommandTypeClose CaptureCommandType = iota
-	CaptureCommandTypeStartRecording
+	// CaptureCommandTypeClose CaptureCommandType = iota
+	CaptureCommandTypeStartRecording CaptureCommandType = iota + 1
 	CaptureCommandTypeStopRecording
 	CaptureCommandTypeCancelRecording
 	CaptureCommandTypeTakePhoto
@@ -119,7 +116,7 @@ type CaptureEvent struct {
 // }
 
 func createCaptureFilename(ext string) string {
-	return time.Now().Format("2006-01-02T15-04-05") + ext
+	return "./captures/" + time.Now().Format("2006-01-02T15-04-05") + ext
 }
 
 // func (c *CamCapture) startSessionIfNeeded() (chan CaptureEvent, chan captureCommand) {
@@ -146,7 +143,9 @@ func StartSession(sourceID int, evtChan chan CaptureEvent, cmdChan chan CaptureC
 	}
 	defer webcam.Close()
 
-	// fps := webcam.Get(gocv.VideoCaptureFPS)
+	ratio := webcam.Get(gocv.VideoCaptureFrameHeight) / webcam.Get(gocv.VideoCaptureFrameWidth)
+	width := 640
+	height := int(float64(width) * ratio) //int(webcam.Get(gocv.VideoCaptureFrameHeight))
 
 	imgRaw := gocv.NewMat()
 	defer imgRaw.Close()
@@ -161,39 +160,40 @@ func StartSession(sourceID int, evtChan chan CaptureEvent, cmdChan chan CaptureC
 	defer imgThresh.Close()
 
 	imgMask := gocv.IMRead("mask.png", gocv.IMReadGrayScale)
-	gocv.Resize(imgMask, &imgMask, image.Pt(0, 0), 0.5, 0.5, 1)
+	gocv.Resize(imgMask, &imgMask, image.Point{width, height}, 0, 0, 1)
 	defer imgMask.Close()
+
+	maskArea := maskArea(imgMask)
 
 	mog2 := gocv.NewBackgroundSubtractorMOG2()
 	defer mog2.Close()
 
-	// var detectionTime *time.Time
-	// var detectionAlarmed bool
-	// var writerFilename *string
-	// var writer *gocv.VideoWriter
+	// recording vars
+	var writerFilename *string
+	var writer *gocv.VideoWriter
 
+	// flags for actions
 	takePhoto := false
 	detectionEnabled := false
 	previewROI := false
 
 	defer func() {
 		evtChan <- CaptureEvent{Type: EventTypeCaptureStopped}
-		// if writer != nil {
-		// 	println("writer closed")
-		// 	writer.Close()
-		// }
+
+		if writer != nil {
+			writer.Close()
+		}
 	}()
 
 	evtChan <- CaptureEvent{Type: EventTypeCaptureStarted}
 	for {
 		select {
 		case cmd := <-cmdChan:
-			println("command", cmd)
+			// println("command", cmd)
+
 			switch cmd {
-			case CaptureCommandTypeClose:
-
-				return
-
+			// case CaptureCommandTypeClose:
+			// 	return
 			case CaptureCommandTypeTakePhoto:
 				takePhoto = true
 
@@ -210,6 +210,42 @@ func StartSession(sourceID int, evtChan chan CaptureEvent, cmdChan chan CaptureC
 
 			case CaptureCommandTypePreviewROI:
 				previewROI = true
+
+			case CaptureCommandTypeStartRecording:
+				if writer == nil {
+					println("Starting recording")
+					fps := webcam.Get(gocv.VideoCaptureFPS)
+					name := createCaptureFilename(".avi")
+
+					writerFilename = &name
+					writer, _ = gocv.VideoWriterFile(name, "MJPG", fps, int(width), int(height), true)
+				}
+
+			case CaptureCommandTypeStopRecording:
+				if writer != nil {
+
+					println("Stop recording")
+					writer.Close()
+
+					evtChan <- CaptureEvent{
+						Type: EventTypeRecordingAvailable,
+						File: *writerFilename,
+					}
+
+					writer = nil
+					writerFilename = nil
+				}
+
+			case CaptureCommandTypeCancelRecording:
+				if writer != nil {
+
+					println("Cancell recording")
+					writer.Close()
+					os.Remove(*writerFilename)
+
+					writer = nil
+					writerFilename = nil
+				}
 
 			default:
 			}
@@ -229,6 +265,8 @@ func StartSession(sourceID int, evtChan chan CaptureEvent, cmdChan chan CaptureC
 			continue
 		}
 
+		gocv.Resize(imgRaw, &imgRaw, image.Point{width, height}, 0, 0, 1)
+
 		if previewROI {
 			previewROI = false
 
@@ -244,12 +282,11 @@ func StartSession(sourceID int, evtChan chan CaptureEvent, cmdChan chan CaptureC
 			previewROI := gocv.NewMat()
 			defer previewROI.Close()
 
+			gocv.Resize(imgMask, &imgMask, image.Point{width, height}, 0, 0, 1)
 			gocv.CvtColor(imgMask, &previewMask, gocv.ColorGrayToBGR)
 			gocv.BitwiseAnd(imgRaw, previewMask, &previewROI)
 			gocv.AddWeighted(imgRaw, 0.3, previewROI, 1, 1, &preview)
 			gocv.IMWrite(file, preview)
-
-			gocv.Resize(imgMask, &imgMask, image.Pt(0, 0), 0.5, 0.5, 1)
 
 			evtChan <- CaptureEvent{
 				Type: EventTypePhotoAvailable,
@@ -267,7 +304,6 @@ func StartSession(sourceID int, evtChan chan CaptureEvent, cmdChan chan CaptureC
 		}
 
 		if detectionEnabled {
-			gocv.Resize(imgRaw, &imgRaw, image.Pt(0, 0), 0.5, 0.5, 1)
 			gocv.CvtColor(imgRaw, &img, gocv.ColorRGBToGray)
 			gocv.BitwiseAnd(img, imgMask, &img)
 			mog2.Apply(img, &imgDelta)
@@ -280,15 +316,21 @@ func StartSession(sourceID int, evtChan chan CaptureEvent, cmdChan chan CaptureC
 
 			contours := gocv.FindContours(imgThresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
 
-			for _, contour := range contours {
-				area := gocv.ContourArea(contour)
-				if area < MinimumArea {
+			for i, contour := range contours {
+				area := gocv.ContourArea(contour) / maskArea * 100
+				// log.Println(area)
+				if area <= detectionMinArea || area >= detectionMaxArea {
 					continue
 				}
 
+				gocv.DrawContours(&imgRaw, contours, i, color.RGBA{255, 0, 0, 0}, 2)
 				evtChan <- CaptureEvent{Type: EventTypeDetection}
 				break
 			}
+		}
+
+		if writer != nil && writer.IsOpened() {
+			writer.Write(imgRaw)
 		}
 
 		// now find contours
@@ -425,4 +467,17 @@ func NewMask(buf []byte) error {
 	gocv.IMWrite("mask.png", mask)
 	log.Println("created mask")
 	return nil
+}
+
+func maskArea(imgMask gocv.Mat) float64 {
+	contours := gocv.FindContours(imgMask, gocv.RetrievalExternal, gocv.ChainApproxSimple)
+	totalArea := float64(0)
+
+	for _, contour := range contours {
+		area := gocv.ContourArea(contour)
+
+		totalArea += area
+	}
+
+	return totalArea
 }

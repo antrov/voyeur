@@ -1,18 +1,35 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/joho/godotenv"
+	"gitlab.com/antrov/couch-watch/internal/alarm"
 	"gitlab.com/antrov/couch-watch/internal/cam"
 )
 
+const (
+	detectionThreshold    = time.Duration(250 * time.Millisecond)
+	cancellationThreshold = time.Duration(700 * time.Millisecond)
+	alarmThreshold        = time.Duration(1 * time.Second)
+	recordingDuration     = time.Duration(5 * time.Second)
+	waitDuration          = time.Duration(10 * time.Second)
+)
+
 func main() {
+	rand.Seed(time.Now().Unix())
+
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -33,9 +50,30 @@ func main() {
 
 	updates, _ := bot.GetUpdatesChan(u)
 
-	events := make(chan cam.CaptureEvent)
+	events := make(chan cam.CaptureEvent, 5)
 	commands := make(chan cam.CaptureCommandType)
 	files := make(chan string)
+
+	ticker := time.NewTicker(time.Millisecond * 100)
+	ticks := ticker.C
+
+	var firstDetectionTime *time.Time
+	var lastDetectionTime *time.Time
+	var detectionAlarmed bool
+	var isRecording bool
+	var isAlarmMuted bool
+
+	resetDetectionState := func() {
+		println("Reset state")
+		firstDetectionTime = nil
+		lastDetectionTime = nil
+		detectionAlarmed = false
+
+		if isRecording {
+			isRecording = false
+			commands <- cam.CaptureCommandTypeCancelRecording
+		}
+	}
 
 	go cam.StartSession(0, events, commands)
 
@@ -45,17 +83,71 @@ func main() {
 		select {
 		case file := <-files:
 			println("new file", file)
-			msg = tgbotapi.NewPhotoUpload(chatID, file)
+
+			switch filepath.Ext(file) {
+			case ".png":
+				msg = tgbotapi.NewPhotoUpload(chatID, file)
+
+			case ".mp4":
+				msg = tgbotapi.NewVideoUpload(chatID, file)
+			}
 
 		case event := <-events:
-			println("cam event", event.Type)
+			// println("cam event", event.Type)
 
 			switch event.Type {
+			// case cam.EventTypeCaptureStarted:
+			// commands <- cam.CaptureCommandTypeStartDetection
+
 			case cam.EventTypePhotoAvailable:
 				msg = tgbotapi.NewPhotoUpload(chatID, event.File)
 
-			case cam.EventTypeCaptureStopped:
+			case cam.EventTypeRecordingAvailable:
+				go compressMovie(event.File, files)
 
+			case cam.EventTypeDetection:
+				now := time.Now()
+
+				if firstDetectionTime == nil {
+					println("First detection")
+					firstDetectionTime = &now
+				}
+
+				lastDetectionTime = &now
+			}
+
+		case <-ticks:
+			if firstDetectionTime == nil {
+				continue
+			}
+
+			switch {
+			case time.Since(*firstDetectionTime) >= waitDuration:
+				resetDetectionState()
+
+			case time.Since(*firstDetectionTime) >= recordingDuration:
+				if isRecording {
+					isRecording = false
+					commands <- cam.CaptureCommandTypeStopRecording
+				}
+
+			case time.Since(*firstDetectionTime) >= alarmThreshold:
+				if !detectionAlarmed {
+					detectionAlarmed = true
+
+					if !isAlarmMuted {
+						go alarm.RandomAlarm()
+					}
+				}
+
+			case time.Since(*firstDetectionTime) >= cancellationThreshold && time.Since(*lastDetectionTime) >= cancellationThreshold && !detectionAlarmed:
+				resetDetectionState()
+
+			case time.Since(*firstDetectionTime) >= detectionThreshold:
+				if !isRecording {
+					isRecording = true
+					commands <- cam.CaptureCommandTypeStartRecording
+				}
 			}
 
 		case update := <-updates:
@@ -73,17 +165,21 @@ func main() {
 					log.Println(err)
 				}
 				commands <- cam.CaptureCommandTypePreviewROI
-				// os.Remove(file)
 			} else if update.Message.IsCommand() {
 				switch update.Message.Command() {
 				case "help":
 					msg = createHelpMsg(chatID)
 
 				case "mute":
+					isAlarmMuted = true
 
 				case "unmute":
+					isAlarmMuted = false
 
 				case "setvolume":
+
+				case "raise":
+					go alarm.RandomAlarm()
 
 				case "enable":
 					commands <- cam.CaptureCommandTypeStartDetection
@@ -112,7 +208,13 @@ func main() {
 		}
 
 		if _, err := bot.Send(msg); err != nil {
-			log.Panic(err)
+			log.Println(err)
+		}
+
+		if fileable, ok := msg.(tgbotapi.VideoConfig); ok {
+			if file, ok := fileable.File.(string); ok {
+				os.Remove(file)
+			}
 		}
 	}
 }
@@ -123,7 +225,7 @@ func createHelpMsg(chatID int64) tgbotapi.MessageConfig {
 	*Manage Alarms*
 	/mute - disable rising of alarm after detection
 	/unmute - enable rising of alarm after detection
-	/setvolume - change volume of alarm
+	/raise - plays alarm sound once
 
 	*Watch Control*
 	/enable - start watching of your ROI
@@ -166,4 +268,21 @@ func createROI(photos *[]tgbotapi.PhotoSize, bot *tgbotapi.BotAPI, chatID int64)
 	msg := tgbotapi.NewMessage(chatID, "Ok, we parsed your drawing and here you go: your brand new the Region of Intereset")
 
 	return msg, nil
+}
+
+func compressMovie(file string, channel chan string) {
+	println("Exporting")
+	cmd := exec.Command("ffmpeg", "-i", file, "-vcodec", "libx264", "-f", "mp4", "-y", file+".mp4")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+
+	if err != nil {
+		println("cmd error")
+		fmt.Println(fmt.Sprint(err) + ": " + stderr.String())
+		return
+	}
+
+	channel <- file + ".mp4"
+	os.Remove(file)
 }
