@@ -21,10 +21,10 @@ import (
 
 const (
 	detectionThreshold    = time.Duration(250 * time.Millisecond)
-	cancellationThreshold = time.Duration(700 * time.Millisecond)
+	cancellationThreshold = time.Duration(600 * time.Millisecond)
 	alarmThreshold        = time.Duration(1 * time.Second)
 	recordingDuration     = time.Duration(5 * time.Second)
-	waitDuration          = time.Duration(10 * time.Second)
+	waitDuration          = time.Duration(1 * time.Minute)
 )
 
 func main() {
@@ -75,7 +75,7 @@ func main() {
 		}
 	}
 
-	go cam.StartSession(0, events, commands)
+	go cam.StartSession(0, events, commands, nil)
 
 	for {
 		var msg tgbotapi.Chattable
