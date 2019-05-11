@@ -79,7 +79,9 @@ func main() {
 		}
 	}
 
-	go cam.StartSession(0, events, commands, nil)
+	maskFile := "/Users/antrov/Library/CouchWatch/mask.png"
+
+	go cam.StartSession(0, maskFile, events, commands, nil)
 
 	for {
 		var msg tgbotapi.Chattable
@@ -164,7 +166,7 @@ func main() {
 			}
 
 			if update.Message.Photo != nil && len(*update.Message.Photo) > 0 {
-				msg, err = createROI(update.Message.Photo, bot, chatID)
+				msg, err = createROI(update.Message.Photo, bot, chatID, maskFile)
 				if err != nil {
 					log.Println(err)
 				}
@@ -172,6 +174,7 @@ func main() {
 			} else if update.Message.IsCommand() {
 				switch update.Message.Command() {
 				case "help":
+				case "start":
 					msg = createHelpMsg(chatID)
 
 				case "mute":
@@ -242,7 +245,7 @@ func createHelpMsg(chatID int64) tgbotapi.MessageConfig {
 	return msg
 }
 
-func createROI(photos *[]tgbotapi.PhotoSize, bot *tgbotapi.BotAPI, chatID int64) (tgbotapi.MessageConfig, error) {
+func createROI(photos *[]tgbotapi.PhotoSize, bot *tgbotapi.BotAPI, chatID int64, file string) (tgbotapi.MessageConfig, error) {
 	drawPhoto := &(*photos)[0]
 
 	for _, photo := range *photos {
@@ -264,7 +267,7 @@ func createROI(photos *[]tgbotapi.PhotoSize, bot *tgbotapi.BotAPI, chatID int64)
 		return tgbotapi.MessageConfig{}, err
 	}
 
-	err = cam.NewMask(data)
+	err = cam.NewMask(data, file)
 	if err != nil {
 		return tgbotapi.MessageConfig{}, err
 	}

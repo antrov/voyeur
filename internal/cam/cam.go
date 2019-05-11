@@ -3,7 +3,6 @@ package cam
 import (
 	"image"
 	"image/color"
-	"log"
 	"os"
 	"time"
 
@@ -57,7 +56,7 @@ func createCaptureFilename(ext string) string {
 }
 
 // StartSession start capture loop. If no commands send, loop is idle
-func StartSession(sourceID int, evtChan chan CaptureEvent, cmdChan chan CaptureCommandType, window *gocv.Window) {
+func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan chan CaptureCommandType, window *gocv.Window) {
 	webcam, err := gocv.OpenVideoCapture(sourceID)
 	if err != nil {
 		return
@@ -80,7 +79,7 @@ func StartSession(sourceID int, evtChan chan CaptureEvent, cmdChan chan CaptureC
 	imgThresh := gocv.NewMat()
 	defer imgThresh.Close()
 
-	imgMask := gocv.IMRead("mask.png", gocv.IMReadGrayScale)
+	imgMask := gocv.IMRead(maskf, gocv.IMReadGrayScale)
 	gocv.Resize(imgMask, &imgMask, image.Point{width, height}, 0, 0, 1)
 	defer imgMask.Close()
 
@@ -192,7 +191,7 @@ func StartSession(sourceID int, evtChan chan CaptureEvent, cmdChan chan CaptureC
 			previewROI = false
 
 			file := createCaptureFilename(".png")
-			imgMask = gocv.IMRead("mask.png", gocv.IMReadGrayScale)
+			imgMask = gocv.IMRead(maskf, gocv.IMReadGrayScale)
 
 			previewMask := gocv.NewMat()
 			defer previewMask.Close()
@@ -280,8 +279,7 @@ func StartSession(sourceID int, evtChan chan CaptureEvent, cmdChan chan CaptureC
 }
 
 // NewMask creates new roi from given buffer with red areas
-func NewMask(buf []byte) error {
-	log.Println("creating mask")
+func NewMask(buf []byte, file string) error {
 	draw, err := gocv.IMDecode(buf, gocv.IMReadUnchanged)
 	if err != nil {
 		return err
@@ -296,8 +294,8 @@ func NewMask(buf []byte) error {
 
 	createMask(draw, draw, &mask, &preview)
 
-	gocv.IMWrite("mask.png", mask)
-	log.Println("created mask")
+	gocv.IMWrite(file, mask)
+
 	return nil
 }
 
