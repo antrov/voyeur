@@ -52,6 +52,12 @@ func main() {
 		log.Println(err)
 	}
 
+	defer func() {
+		if _, err := bot.Send(tgbotapi.NewMessage(chatID, "im dead")); err != nil {
+			log.Println(err)
+		}
+	}()
+
 	updates, _ := bot.GetUpdatesChan(u)
 
 	events := make(chan cam.CaptureEvent, 5)
