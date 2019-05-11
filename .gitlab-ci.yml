@@ -27,3 +27,8 @@ compile:
     artifacts:
       paths:
         - couch-watch
+
+launchd:
+    stage: deploy
+    script:
+      - cp $CI_PROJECT_DIR/couch-watch /usr/local/bin/couch-watch
