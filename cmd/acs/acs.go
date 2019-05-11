@@ -75,7 +75,7 @@ func main() {
 		}
 	}
 
-	go cam.StartSession(0, events, commands, nil)
+	// go cam.StartSession(0, events, commands, nil)
 
 	for {
 		var msg tgbotapi.Chattable
