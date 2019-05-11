@@ -48,6 +48,10 @@ func main() {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
+	if _, err := bot.Send(tgbotapi.NewMessage(chatID, "hello")); err != nil {
+		log.Println(err)
+	}
+
 	updates, _ := bot.GetUpdatesChan(u)
 
 	events := make(chan cam.CaptureEvent, 5)
