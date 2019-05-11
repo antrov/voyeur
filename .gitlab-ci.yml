@@ -31,4 +31,6 @@ compile:
 launchd:
     stage: deploy
     script:
+      - launchctl stop couch-watch
       - cp $CI_PROJECT_DIR/couch-watch /usr/local/bin/couch-watch
+      - launchctl start couch-watch
