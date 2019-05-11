@@ -37,12 +37,12 @@ func main() {
 
 	chatID, err := strconv.ParseInt(os.Getenv("TELEGRAM_CHAT_ID"), 10, 64)
 	if err != nil {
-		log.Panic(err)
+		log.Fatalln(err)
 	}
 
 	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_TOKEN"))
 	if err != nil {
-		log.Panic(err)
+		log.Fatalln(err)
 	}
 
 	u := tgbotapi.NewUpdate(0)
