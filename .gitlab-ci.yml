@@ -23,7 +23,7 @@ compile:
     stage: build
     script:
       - go get -u -d ./...
-      - go build -race -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/couch-watch cmd/acs/acs.go
+      - go build -race -o $CI_PROJECT_DIR/couch-watch cmd/acs/acs.go
     artifacts:
       paths:
         - couch-watch
