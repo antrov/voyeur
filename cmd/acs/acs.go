@@ -218,8 +218,14 @@ func main() {
 			log.Println(err)
 		}
 
-		if fileable, ok := msg.(tgbotapi.VideoConfig); ok {
-			if file, ok := fileable.File.(string); ok {
+		if videoConfig, ok := msg.(tgbotapi.VideoConfig); ok {
+			if file, ok := videoConfig.File.(string); ok {
+				os.Remove(file)
+			}
+		}
+
+		if photoConfig, ok := msg.(tgbotapi.PhotoConfig); ok {
+			if file, ok := photoConfig.File.(string); ok {
 				os.Remove(file)
 			}
 		}

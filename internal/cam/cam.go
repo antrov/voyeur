@@ -3,6 +3,7 @@ package cam
 import (
 	"image"
 	"image/color"
+	"log"
 	"os"
 	"time"
 
@@ -80,6 +81,9 @@ func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan
 	defer imgThresh.Close()
 
 	imgMask := gocv.IMRead(maskf, gocv.IMReadGrayScale)
+	if imgMask.Empty() {
+		log.Fatalln("Mask not loaded")
+	}
 	gocv.Resize(imgMask, &imgMask, image.Point{width, height}, 0, 0, 1)
 	defer imgMask.Close()
 
