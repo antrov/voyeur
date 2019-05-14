@@ -20,9 +20,9 @@ import (
 )
 
 const (
-	detectionThreshold    = time.Duration(250 * time.Millisecond)
-	cancellationThreshold = time.Duration(600 * time.Millisecond)
-	alarmThreshold        = time.Duration(1 * time.Second)
+	detectionThreshold    = time.Duration(200 * time.Millisecond)
+	cancellationThreshold = time.Duration(500 * time.Millisecond)
+	alarmThreshold        = time.Duration(600 * time.Millisecond)
 	recordingDuration     = time.Duration(5 * time.Second)
 	waitDuration          = time.Duration(1 * time.Minute)
 )

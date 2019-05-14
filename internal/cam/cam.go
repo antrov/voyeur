@@ -109,6 +109,8 @@ func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan
 		}
 	}()
 
+	log.Println("Starting camera loop")
+
 	evtChan <- CaptureEvent{Type: EventTypeCaptureStarted}
 	for {
 		select {
@@ -182,10 +184,12 @@ func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan
 		}
 
 		if ok := webcam.Read(&imgRaw); !ok {
+			log.Println("Reading frame from camera is not ok. Breaking")
 			break
 		}
 
 		if imgRaw.Empty() {
+			log.Println("Captured frame is empty")
 			continue
 		}
 
