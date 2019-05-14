@@ -48,9 +48,9 @@ func main() {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
-	if _, err := bot.Send(tgbotapi.NewMessage(chatID, "hello")); err != nil {
-		log.Println(err)
-	}
+	// if _, err := bot.Send(tgbotapi.NewMessage(chatID, "hello")); err != nil {
+	// 	log.Println(err)
+	// }
 
 	updates, _ := bot.GetUpdatesChan(u)
 
@@ -79,7 +79,7 @@ func main() {
 		}
 	}
 
-	maskFile := "/Users/antrov/Library/CouchWatch/mask.png"
+	maskFile := os.Getenv("MASK_PATH")
 
 	go cam.StartSession(0, maskFile, events, commands, nil)
 
