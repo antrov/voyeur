@@ -2,7 +2,6 @@ package cam
 
 import (
 	"image"
-	"image/color"
 
 	"gocv.io/x/gocv"
 )
@@ -50,79 +49,39 @@ func NewDetector(mask gocv.Mat) Detector {
 
 // Process for procesing image
 func (d *Detector) Process(imgRaw gocv.Mat, imgDst *gocv.Mat) (bool, []gocv.Mat) {
-	if &d.ImgBack == nil {
-		d.ImgBack = imgRaw
-	}
+	var stages []gocv.Mat
 
 	found := false
-	stages := []gocv.Mat{}
 
-	stages = append(stages, imgRaw)
+	d.mog2.Apply(imgRaw, &d.ImgDelta)
 
-	img := gocv.NewMat()
-	defer img.Close()
-
-	appendImg := func(i gocv.Mat) {
-		imgCopy := gocv.NewMat()
-		i.CopyTo(&imgCopy)
-		stages = append(stages, imgCopy)
-	}
-
-	// wyrównywanie jasności
-	// gocv.CvtColor(imgRaw, &img, gocv.ColorBGRToYUV)
-	// channels := gocv.Split(img)
-	// gocv.EqualizeHist(channels[0], &channels[0])
-	// gocv.Merge(channels, &img)
-	// gocv.CvtColor(img, &img, gocv.ColorYUVToBGR)
-
-	// imgEqual := gocv.NewMat()
-	// img.CopyTo(&imgEqual)
-	// stages = append(stages, imgEqual)
-
-	gocv.GaussianBlur(imgRaw, &img, image.Point{3, 3}, 9, 9, gocv.BorderDefault)
-
-	// gocv.BitwiseAnd(img, d.ImgMask, &img)
-	d.mog2.Apply(img, &d.ImgDelta)
-
-	bgr := gocv.NewMat()
-	gocv.CvtColor(d.ImgDelta, &bgr, gocv.ColorGrayToBGR)
-	appendImg(bgr)
-
+	// remaining cleanup of the image to use for finding contours.
+	// first use threshold
 	gocv.Threshold(d.ImgDelta, &d.ImgThresh, 25, 255, gocv.ThresholdBinary)
-
-	bgr = gocv.NewMat()
-	gocv.CvtColor(d.ImgThresh, &bgr, gocv.ColorGrayToBGR)
-	appendImg(bgr)
 
 	// then dilate
 	kernel := gocv.GetStructuringElement(gocv.MorphRect, image.Pt(3, 3))
 	defer kernel.Close()
 	gocv.Dilate(d.ImgThresh, &d.ImgThresh, kernel)
 
-	bgr = gocv.NewMat()
-	gocv.CvtColor(d.ImgThresh, &bgr, gocv.ColorGrayToBGR)
-	appendImg(bgr)
-
+	// now find contours
 	contours := gocv.FindContours(d.ImgThresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
-	drawings := gocv.NewMat()
-	imgRaw.CopyTo(&drawings)
-
-	for i, contour := range contours {
-		area := gocv.ContourArea(contour) // / maskArea * 100
-		// // log.Println(area)
-		// if area <= detectionMinArea || area >= detectionMaxArea {
-		// 	continue
-		// }
-
-		if area <= 100 {
+	for _, c := range contours {
+		area := gocv.ContourArea(c)
+		if area < 300 {
 			continue
 		}
 
 		found = true
-		gocv.DrawContours(&drawings, contours, i, color.RGBA{255, 0, 0, 0}, 2)
-	}
+		break
 
-	appendImg(drawings)
+		// status = "Motion detected"
+		// statusColor = color.RGBA{255, 0, 0, 0}
+		// gocv.DrawContours(&img, contours, i, statusColor, 2)
+
+		// rect := gocv.BoundingRect(c)
+		// gocv.Rectangle(&img, rect, color.RGBA{0, 0, 255, 0}, 2)
+	}
 
 	return found, stages
 }

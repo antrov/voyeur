@@ -69,23 +69,23 @@ func main() {
 		gocv.Resize(imgRaw, &imgScaled, image.Point{width, height}, 0, 0, 1)
 
 		processTime = time.Now()
-		_, stages := detector.Process(imgScaled, nil)
+		detector.Process(imgScaled, nil)
 
-		if window != nil {
-			img := stages[0]
+		// if window != nil {
+		// 	img := stages[0]
 
-			for i, stage := range stages {
-				if i > 0 {
-					gocv.Hconcat(img, stage, &img)
-				}
-			}
+		// 	for i, stage := range stages {
+		// 		if i > 0 {
+		// 			gocv.Hconcat(img, stage, &img)
+		// 		}
+		// 	}
 
-			window.IMShow(img)
+		// 	window.IMShow(img)
 
-			if window.WaitKey(10) == 27 {
-				break
-			}
-		}
+		// 	if window.WaitKey(10) == 27 {
+		// 		break
+		// 	}
+		// }
 
 		processDuration := time.Since(processTime)
 
@@ -96,11 +96,5 @@ func main() {
 		fmt.Printf("\rFPS: %d, process time: %d (current %s) ", fpsSum/framesCnt, processSum/framesCnt, processDuration)
 
 		frameTime = time.Now()
-
-		defer func() {
-			for _, stage := range stages {
-				stage.Close()
-			}
-		}()
 	}
 }
