@@ -1,17 +1,26 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"image"
 	"log"
+	"time"
 
 	"gitlab.com/antrov/couch-watch/internal/cam"
 	"gocv.io/x/gocv"
 )
 
 func main() {
-	window := gocv.NewWindow("Motion Window")
-	// window.SetWindowProperty(gocv.WindowPropertyFullscreen, gocv.windowf)
-	defer window.Close()
+	headlessFlag := flag.Bool("headless", false, "show results in window")
+	flag.Parse()
+
+	var window *gocv.Window
+
+	if *headlessFlag == false {
+		window = gocv.NewWindow("Motion Window")
+		defer window.Close()
+	}
 
 	webcam, err := gocv.OpenVideoCapture(0)
 	if err != nil {
@@ -39,6 +48,13 @@ func main() {
 	detector := cam.NewDetector(imgMask)
 	defer detector.Close()
 
+	frameTime := time.Now()
+	processTime := time.Now()
+
+	fpsSum := 0
+	processSum := 0
+	framesCnt := 0
+
 	for {
 		if ok := webcam.Read(&imgRaw); !ok {
 			log.Println("Reading frame from camera is not ok. Breaking")
@@ -52,21 +68,32 @@ func main() {
 
 		gocv.Resize(imgRaw, &imgScaled, image.Point{width, height}, 0, 0, 1)
 
+		processTime = time.Now()
 		_, stages := detector.Process(imgScaled, nil)
 
-		img := stages[0]
+		if window != nil {
+			img := stages[0]
 
-		for i, stage := range stages {
-			if i > 0 {
-				gocv.Hconcat(img, stage, &img)
+			for i, stage := range stages {
+				if i > 0 {
+					gocv.Hconcat(img, stage, &img)
+				}
+			}
+
+			window.IMShow(img)
+
+			if window.WaitKey(10) == 27 {
+				break
 			}
 		}
 
-		window.IMShow(img)
+		framesCnt++
+		fpsSum += int(time.Second / time.Since(frameTime))
+		processSum += int(time.Since(processTime) / time.Millisecond)
 
-		if window.WaitKey(10) == 27 {
-			break
-		}
+		fmt.Printf("\rFPS: %d, process time: %d |", fpsSum/framesCnt, processSum/framesCnt)
+
+		frameTime = time.Now()
 
 		defer func() {
 			for _, stage := range stages {
