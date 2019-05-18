@@ -87,11 +87,13 @@ func main() {
 			}
 		}
 
+		processDuration := time.Since(processTime)
+
 		framesCnt++
 		fpsSum += int(time.Second / time.Since(frameTime))
-		processSum += int(time.Since(processTime) / time.Millisecond)
+		processSum += int(processDuration / time.Millisecond)
 
-		fmt.Printf("\rFPS: %d, process time: %d |", fpsSum/framesCnt, processSum/framesCnt)
+		fmt.Printf("\rFPS: %d, process time: %d (current %s) ", fpsSum/framesCnt, processSum/framesCnt, processDuration)
 
 		frameTime = time.Now()
 
