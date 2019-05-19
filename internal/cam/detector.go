@@ -54,6 +54,9 @@ func (d *Detector) Process(imgRaw gocv.Mat, imgDst *gocv.Mat) (bool, []gocv.Mat)
 
 	// imgRaw.CopyTo(imgDst)
 
+	gocv.CvtColor(imgRaw, &imgRaw, gocv.ColorRGBToGray)
+	gocv.BitwiseAnd(imgRaw, d.ImgMask, &imgRaw)
+
 	d.mog2.Apply(imgRaw, &d.ImgDelta)
 
 	// remaining cleanup of the image to use for finding contours.
@@ -69,24 +72,25 @@ func (d *Detector) Process(imgRaw gocv.Mat, imgDst *gocv.Mat) (bool, []gocv.Mat)
 	gocv.CvtColor(*imgDst, imgDst, gocv.ColorGrayToBGR)
 
 	// now find contours
-	contours := gocv.FindContours(d.ImgThresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
-	for _, c := range contours {
-		area := gocv.ContourArea(c)
-		if area < 50 {
-			continue
-		}
+	// contours := gocv.FindContours(d.ImgThresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
+	// for _, c := range contours {
+	// 	area := gocv.ContourArea(c)
+	// 	if area < 50 {
+	// 		continue
+	// 	}
 
-		found = true
+	// 	found = true
+	// 	break
 
-		// status = "Motion detected"
-		// statusColor := color.RGBA{255, 0, 0, 0}
-		// gocv.DrawContours(imgDst, contours, i, statusColor, 2)
+	// status = "Motion detected"
+	// statusColor := color.RGBA{255, 0, 0, 0}
+	// gocv.DrawContours(imgDst, contours, i, statusColor, 2)
 
-		// rect := gocv.BoundingRect(c)
-		// gocv.Rectangle(imgDst, rect, color.RGBA{0, 0, 255, 0}, 2)
-		// gocv.PutText(imgDst, fmt.Sprintf("%.2f", area), rect.Min, gocv.FontHersheyPlain, 1.2, statusColor, 2)
-		// break
-	}
+	// rect := gocv.BoundingRect(c)
+	// gocv.Rectangle(imgDst, rect, color.RGBA{0, 0, 255, 0}, 2)
+	// gocv.PutText(imgDst, fmt.Sprintf("%.2f", area), rect.Min, gocv.FontHersheyPlain, 1.2, statusColor, 2)
+	// break
+	// }
 
 	return found, stages
 }

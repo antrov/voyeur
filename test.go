@@ -23,8 +23,8 @@ func main() {
 	}
 
 	// webcam, err := gocv.OpenVideoCapture("udp://0.0.0.0:5000")
-	// webcam, err := gocv.OpenVideoCapture("tcp://192.168.1.83:5000")
-	webcam, err := gocv.OpenVideoCapture(0)
+	webcam, err := gocv.OpenVideoCapture("tcp://192.168.1.83:5000")
+	// webcam, err := gocv.OpenVideoCapture(0)
 	if err != nil {
 		return
 	}
@@ -33,9 +33,8 @@ func main() {
 	webcam.Set(gocv.VideoCaptureFrameHeight, 720)
 	defer webcam.Close()
 
-	// ratio := webcam.Get(gocv.VideoCaptureFrameHeight) / webcam.Get(gocv.VideoCaptureFrameWidth)
-	width := 640
-	height := 480 //int(float64(width) * ratio) //int(webcam.Get(gocv.VideoCaptureFrameHeight))
+	width := int(webcam.Get(gocv.VideoCaptureFrameWidth))
+	height := int(webcam.Get(gocv.VideoCaptureFrameHeight))
 
 	imgRaw := gocv.NewMat()
 	defer imgRaw.Close()
@@ -88,7 +87,7 @@ func main() {
 		fmt.Printf("\rFPS: %d, process time: %d (current %s) ", fpsSum/framesCnt, processSum/framesCnt, processDuration)
 
 		if window != nil {
-			window.IMShow(imgResult)
+			window.IMShow(imgRaw)
 
 			if window.WaitKey(10) == 27 {
 				break
