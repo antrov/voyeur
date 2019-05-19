@@ -1,9 +1,6 @@
 package cam
 
 import (
-	"fmt"
-	"image/color"
-
 	"gocv.io/x/gocv"
 )
 
@@ -73,7 +70,7 @@ func (d *Detector) Process(imgRaw gocv.Mat, imgDst *gocv.Mat) (bool, []gocv.Mat)
 
 	// now find contours
 	contours := gocv.FindContours(d.ImgThresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
-	for i, c := range contours {
+	for _, c := range contours {
 		area := gocv.ContourArea(c)
 		if area < 50 {
 			continue
@@ -82,12 +79,12 @@ func (d *Detector) Process(imgRaw gocv.Mat, imgDst *gocv.Mat) (bool, []gocv.Mat)
 		found = true
 
 		// status = "Motion detected"
-		statusColor := color.RGBA{255, 0, 0, 0}
-		gocv.DrawContours(imgDst, contours, i, statusColor, 2)
+		// statusColor := color.RGBA{255, 0, 0, 0}
+		// gocv.DrawContours(imgDst, contours, i, statusColor, 2)
 
-		rect := gocv.BoundingRect(c)
-		gocv.Rectangle(imgDst, rect, color.RGBA{0, 0, 255, 0}, 2)
-		gocv.PutText(imgDst, fmt.Sprintf("%.2f", area), rect.Min, gocv.FontHersheyPlain, 1.2, statusColor, 2)
+		// rect := gocv.BoundingRect(c)
+		// gocv.Rectangle(imgDst, rect, color.RGBA{0, 0, 255, 0}, 2)
+		// gocv.PutText(imgDst, fmt.Sprintf("%.2f", area), rect.Min, gocv.FontHersheyPlain, 1.2, statusColor, 2)
 		// break
 	}
 
