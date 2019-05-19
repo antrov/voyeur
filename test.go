@@ -22,15 +22,20 @@ func main() {
 		defer window.Close()
 	}
 
+	// webcam, err := gocv.OpenVideoCapture("udp://0.0.0.0:5000")
+	// webcam, err := gocv.OpenVideoCapture("tcp://192.168.1.83:5000")
 	webcam, err := gocv.OpenVideoCapture(0)
 	if err != nil {
 		return
 	}
+
+	webcam.Set(gocv.VideoCaptureFrameWidth, 960)
+	webcam.Set(gocv.VideoCaptureFrameHeight, 720)
 	defer webcam.Close()
 
-	ratio := webcam.Get(gocv.VideoCaptureFrameHeight) / webcam.Get(gocv.VideoCaptureFrameWidth)
+	// ratio := webcam.Get(gocv.VideoCaptureFrameHeight) / webcam.Get(gocv.VideoCaptureFrameWidth)
 	width := 640
-	height := int(float64(width) * ratio) //int(webcam.Get(gocv.VideoCaptureFrameHeight))
+	height := 480 //int(float64(width) * ratio) //int(webcam.Get(gocv.VideoCaptureFrameHeight))
 
 	imgRaw := gocv.NewMat()
 	defer imgRaw.Close()
@@ -55,6 +60,9 @@ func main() {
 	processSum := 0
 	framesCnt := 0
 
+	imgResult := gocv.NewMat()
+	defer imgResult.Close()
+
 	for {
 		if ok := webcam.Read(&imgRaw); !ok {
 			log.Println("Reading frame from camera is not ok. Breaking")
@@ -66,26 +74,10 @@ func main() {
 			continue
 		}
 
-		gocv.Resize(imgRaw, &imgScaled, image.Point{width, height}, 0, 0, 1)
+		// gocv.Resize(imgRaw, &imgScaled, image.Point{width, height}, 0, 0, 1)
 
 		processTime = time.Now()
-		detector.Process(imgScaled, nil)
-
-		// if window != nil {
-		// 	img := stages[0]
-
-		// 	for i, stage := range stages {
-		// 		if i > 0 {
-		// 			gocv.Hconcat(img, stage, &img)
-		// 		}
-		// 	}
-
-		// 	window.IMShow(img)
-
-		// 	if window.WaitKey(10) == 27 {
-		// 		break
-		// 	}
-		// }
+		detector.Process(imgRaw, &imgResult)
 
 		processDuration := time.Since(processTime)
 
@@ -94,6 +86,14 @@ func main() {
 		processSum += int(processDuration / time.Millisecond)
 
 		fmt.Printf("\rFPS: %d, process time: %d (current %s) ", fpsSum/framesCnt, processSum/framesCnt, processDuration)
+
+		if window != nil {
+			window.IMShow(imgResult)
+
+			if window.WaitKey(10) == 27 {
+				break
+			}
+		}
 
 		frameTime = time.Now()
 	}

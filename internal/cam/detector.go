@@ -1,7 +1,8 @@
 package cam
 
 import (
-	"image"
+	"fmt"
+	"image/color"
 
 	"gocv.io/x/gocv"
 )
@@ -11,7 +12,7 @@ type Detector struct {
 	ImgDelta  gocv.Mat
 	ImgThresh gocv.Mat
 	ImgMask   gocv.Mat
-	mog2      gocv.BackgroundSubtractorMOG2
+	mog2      gocv.BackgroundSubtractorKNN
 	ImgBack   gocv.Mat
 }
 
@@ -43,7 +44,8 @@ func NewDetector(mask gocv.Mat) Detector {
 		ImgDelta:  gocv.NewMat(),
 		ImgThresh: gocv.NewMat(),
 		ImgMask:   mask,
-		mog2:      gocv.NewBackgroundSubtractorMOG2(),
+		mog2:      gocv.NewBackgroundSubtractorKNN(),
+		ImgBack:   gocv.NewMat(),
 	}
 }
 
@@ -53,6 +55,8 @@ func (d *Detector) Process(imgRaw gocv.Mat, imgDst *gocv.Mat) (bool, []gocv.Mat)
 
 	found := false
 
+	// imgRaw.CopyTo(imgDst)
+
 	d.mog2.Apply(imgRaw, &d.ImgDelta)
 
 	// remaining cleanup of the image to use for finding contours.
@@ -60,27 +64,31 @@ func (d *Detector) Process(imgRaw gocv.Mat, imgDst *gocv.Mat) (bool, []gocv.Mat)
 	gocv.Threshold(d.ImgDelta, &d.ImgThresh, 25, 255, gocv.ThresholdBinary)
 
 	// then dilate
-	kernel := gocv.GetStructuringElement(gocv.MorphRect, image.Pt(3, 3))
-	defer kernel.Close()
-	gocv.Dilate(d.ImgThresh, &d.ImgThresh, kernel)
+	// kernel := gocv.GetStructuringElement(gocv.MorphRect, image.Pt(3, 3))
+	// defer kernel.Close()
+	// gocv.Dilate(d.ImgThresh, &d.ImgThresh, kernel)
+
+	d.ImgDelta.CopyTo(imgDst)
+	gocv.CvtColor(*imgDst, imgDst, gocv.ColorGrayToBGR)
 
 	// now find contours
 	contours := gocv.FindContours(d.ImgThresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
-	for _, c := range contours {
+	for i, c := range contours {
 		area := gocv.ContourArea(c)
-		if area < 300 {
+		if area < 50 {
 			continue
 		}
 
 		found = true
-		break
 
 		// status = "Motion detected"
-		// statusColor = color.RGBA{255, 0, 0, 0}
-		// gocv.DrawContours(&img, contours, i, statusColor, 2)
+		statusColor := color.RGBA{255, 0, 0, 0}
+		gocv.DrawContours(imgDst, contours, i, statusColor, 2)
 
-		// rect := gocv.BoundingRect(c)
-		// gocv.Rectangle(&img, rect, color.RGBA{0, 0, 255, 0}, 2)
+		rect := gocv.BoundingRect(c)
+		gocv.Rectangle(imgDst, rect, color.RGBA{0, 0, 255, 0}, 2)
+		gocv.PutText(imgDst, fmt.Sprintf("%.2f", area), rect.Min, gocv.FontHersheyPlain, 1.2, statusColor, 2)
+		// break
 	}
 
 	return found, stages
