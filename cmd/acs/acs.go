@@ -81,7 +81,7 @@ func main() {
 
 	maskFile := os.Getenv("MASK_PATH")
 
-	go cam.StartSession(0, maskFile, events, commands, nil)
+	go cam.StartSession(0, maskFile, events, commands)
 
 	for {
 		var msg tgbotapi.Chattable
@@ -102,14 +102,14 @@ func main() {
 			// println("cam event", event.Type)
 
 			switch event.Type {
-			// case cam.EventTypeCaptureStarted:
-			// commands <- cam.CaptureCommandTypeStartDetection
+			case cam.EventTypeCaptureStarted:
+				commands <- cam.CaptureCommandTypeStartDetection
 
 			case cam.EventTypePhotoAvailable:
 				msg = tgbotapi.NewPhotoUpload(chatID, event.File)
 
 			case cam.EventTypeRecordingAvailable:
-				go compressMovie(event.File, files)
+				// go compressMovie(event.File, files)
 
 			case cam.EventTypeDetection:
 				now := time.Now()
@@ -142,7 +142,7 @@ func main() {
 					detectionAlarmed = true
 
 					if !isAlarmMuted {
-						go alarm.RandomAlarm()
+						// go alarm.RandomAlarm()
 					}
 				}
 
@@ -158,6 +158,7 @@ func main() {
 
 		case update := <-updates:
 			if update.Message.Chat.ID != chatID {
+				log.Println("Message from unexpected chatId", update.Message.Chat.ID)
 				continue
 			}
 
@@ -173,8 +174,8 @@ func main() {
 				commands <- cam.CaptureCommandTypePreviewROI
 			} else if update.Message.IsCommand() {
 				switch update.Message.Command() {
-				case "help":
-				case "start":
+				case "help",
+					"start":
 					msg = createHelpMsg(chatID)
 
 				case "mute":

@@ -1,8 +1,8 @@
 package cam
 
 import (
+	"fmt"
 	"image"
-	"image/color"
 	"log"
 	"os"
 	"time"
@@ -57,40 +57,32 @@ func createCaptureFilename(ext string) string {
 }
 
 // StartSession start capture loop. If no commands send, loop is idle
-func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan chan CaptureCommandType, window *gocv.Window) {
+func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan chan CaptureCommandType) {
 	webcam, err := gocv.OpenVideoCapture(sourceID)
 	if err != nil {
 		return
 	}
+	webcam.Set(gocv.VideoCaptureFrameWidth, 960)
+	webcam.Set(gocv.VideoCaptureFrameHeight, 720)
 	defer webcam.Close()
 
-	ratio := webcam.Get(gocv.VideoCaptureFrameHeight) / webcam.Get(gocv.VideoCaptureFrameWidth)
-	width := 640
-	height := int(float64(width) * ratio) //int(webcam.Get(gocv.VideoCaptureFrameHeight))
+	width := int(webcam.Get(gocv.VideoCaptureFrameWidth))
+	height := int(webcam.Get(gocv.VideoCaptureFrameHeight))
 
 	imgRaw := gocv.NewMat()
 	defer imgRaw.Close()
 
-	img := gocv.NewMat()
-	defer img.Close()
-
-	imgDelta := gocv.NewMat()
-	defer imgDelta.Close()
-
-	imgThresh := gocv.NewMat()
-	defer imgThresh.Close()
+	// regionRect := image.Rect(29, 156, 859, 634)
+	regionRect := image.Rect(20, 20, 400, 400)
 
 	imgMask := gocv.IMRead(maskf, gocv.IMReadGrayScale)
 	if imgMask.Empty() {
 		log.Fatalln("Mask not loaded")
 	}
-	gocv.Resize(imgMask, &imgMask, image.Point{width, height}, 0, 0, 1)
-	defer imgMask.Close()
+	imgMask = imgMask.Region(regionRect)
 
-	maskArea := maskArea(imgMask)
-
-	mog2 := gocv.NewBackgroundSubtractorMOG2()
-	defer mog2.Close()
+	detector := NewDetector(imgMask)
+	defer detector.Close()
 
 	// recording vars
 	var writerFilename *string
@@ -100,6 +92,14 @@ func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan
 	takePhoto := false
 	detectionEnabled := false
 	previewROI := false
+
+	// telemetry and stats vars
+	frameTime := time.Now()
+	processTime := time.Now()
+
+	fpsSum := 0
+	processSum := 0
+	framesCnt := 0
 
 	defer func() {
 		evtChan <- CaptureEvent{Type: EventTypeCaptureStopped}
@@ -124,15 +124,13 @@ func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan
 				takePhoto = true
 
 			case CaptureCommandTypeStartDetection:
+				log.Println("Start detection")
 				detectionEnabled = true
 
 			case CaptureCommandTypeStopDetection:
+				log.Println("Stop detection")
 				detectionEnabled = false
-
-				zeros := gocv.NewMat()
-				zeros.CopyTo(&img)
-				zeros.CopyTo(&imgDelta)
-				zeros.CopyTo(&imgThresh)
+				detector.Clear()
 
 			case CaptureCommandTypePreviewROI:
 				previewROI = true
@@ -193,7 +191,18 @@ func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan
 			continue
 		}
 
-		gocv.Resize(imgRaw, &imgRaw, image.Point{width, height}, 0, 0, 1)
+		imgScaled := imgRaw.Region(regionRect)
+		defer imgScaled.Close()
+
+		if takePhoto {
+			takePhoto = false
+			file := createCaptureFilename(".png")
+			gocv.IMWrite(file, imgRaw)
+
+			evtChan <- CaptureEvent{
+				Type: EventTypePhotoAvailable,
+				File: file}
+		}
 
 		if previewROI {
 			previewROI = false
@@ -212,8 +221,8 @@ func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan
 
 			gocv.Resize(imgMask, &imgMask, image.Point{width, height}, 0, 0, 1)
 			gocv.CvtColor(imgMask, &previewMask, gocv.ColorGrayToBGR)
-			gocv.BitwiseAnd(imgRaw, previewMask, &previewROI)
-			gocv.AddWeighted(imgRaw, 0.3, previewROI, 1, 1, &preview)
+			gocv.BitwiseAnd(imgScaled, previewMask, &previewROI)
+			gocv.AddWeighted(imgScaled, 0.3, previewROI, 1, 1, &preview)
 			gocv.IMWrite(file, preview)
 
 			evtChan <- CaptureEvent{
@@ -221,67 +230,27 @@ func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan
 				File: file}
 		}
 
-		if takePhoto {
-			takePhoto = false
-			file := createCaptureFilename(".png")
-			gocv.IMWrite(file, imgRaw)
-
-			evtChan <- CaptureEvent{
-				Type: EventTypePhotoAvailable,
-				File: file}
-		}
-
-		// concat := gocv.NewMat()
-		// defer concat.Close()
-
 		if detectionEnabled {
-			// gocv.CvtColor(imgRaw, &concat, gocv.ColorBGRToGray)
-
-			gocv.CvtColor(imgRaw, &img, gocv.ColorBGRToYUV)
-			channels := gocv.Split(img)
-			gocv.EqualizeHist(channels[0], &channels[0])
-			gocv.Merge(channels, &img)
-			gocv.CvtColor(img, &img, gocv.ColorYUVToBGR)
-			gocv.GaussianBlur(img, &img, image.Point{3, 3}, 9, 9, gocv.BorderDefault)
-
-			gocv.CvtColor(img, &img, gocv.ColorRGBToGray)
-			gocv.BitwiseAnd(img, imgMask, &img)
-			mog2.Apply(img, &imgDelta)
-			gocv.Threshold(imgDelta, &imgThresh, 25, 255, gocv.ThresholdBinary)
-
-			// then dilate
-			kernel := gocv.GetStructuringElement(gocv.MorphRect, image.Pt(3, 3))
-			defer kernel.Close()
-			gocv.Dilate(imgThresh, &imgThresh, kernel)
-
-			contours := gocv.FindContours(imgThresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
-
-			for i, contour := range contours {
-				area := gocv.ContourArea(contour) / maskArea * 100
-				// log.Println(area)
-				if area <= detectionMinArea || area >= detectionMaxArea {
-					continue
-				}
-
-				gocv.DrawContours(&img, contours, i, color.RGBA{255, 0, 0, 0}, 2)
+			processTime = time.Now()
+			if detector.Process(imgScaled, nil) {
 				evtChan <- CaptureEvent{Type: EventTypeDetection}
-				break
 			}
 
-			// gocv.Hconcat(concat, img, &concat)
-			// gocv.Hconcat(concat, imgDelta, &concat)
+			processDuration := time.Since(processTime)
+
+			framesCnt++
+			fpsSum += int(time.Second / time.Since(frameTime))
+			processSum += int(processDuration / time.Millisecond)
+
+			fmt.Printf("\rFPS: %d, process time: %d (current %s) ", fpsSum/framesCnt, processSum/framesCnt, processDuration)
 		}
 
 		if writer != nil && writer.IsOpened() {
-			writer.Write(imgRaw)
+			writer.Write(imgScaled)
+			log.Println("writing")
 		}
 
-		// window.IMShow(concat)
-
-		// if window.WaitKey(10) == 27 {
-		// 	break
-		// }
-
+		frameTime = time.Now()
 	}
 
 }
