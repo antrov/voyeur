@@ -13,6 +13,7 @@ import (
 
 func main() {
 	headlessFlag := flag.Bool("headless", false, "show results in window")
+	inputFlag := flag.String("input", "0", "opencv input address")
 	flag.Parse()
 
 	var window *gocv.Window
@@ -23,8 +24,8 @@ func main() {
 	}
 
 	// webcam, err := gocv.OpenVideoCapture("udp://0.0.0.0:5000")
-	webcam, err := gocv.OpenVideoCapture("tcp://192.168.1.83:5000")
-	// webcam, err := gocv.OpenVideoCapture(0)
+	// webcam, err := gocv.OpenVideoCapture("tcp://192.168.1.83:5000")
+	webcam, err := gocv.OpenVideoCapture(*inputFlag)
 	if err != nil {
 		return
 	}
@@ -47,6 +48,7 @@ func main() {
 		log.Fatalln("Mask not loaded")
 	}
 	gocv.Resize(imgMask, &imgMask, image.Point{width, height}, 0, 0, 1)
+	imgMask = imgMask.Region(image.Rect(29, 156, 859, 634))
 	// maskArea := maskArea(imgMask)
 
 	detector := cam.NewDetector(imgMask)
@@ -75,8 +77,10 @@ func main() {
 
 		// gocv.Resize(imgRaw, &imgScaled, image.Point{width, height}, 0, 0, 1)
 
+		imgScaled = imgRaw.Region(image.Rect(29, 156, 859, 634))
+
 		processTime = time.Now()
-		detector.Process(imgRaw, &imgResult)
+		detector.Process(imgScaled, &imgResult)
 
 		processDuration := time.Since(processTime)
 
@@ -87,7 +91,7 @@ func main() {
 		fmt.Printf("\rFPS: %d, process time: %d (current %s) ", fpsSum/framesCnt, processSum/framesCnt, processDuration)
 
 		if window != nil {
-			window.IMShow(imgRaw)
+			window.IMShow(imgScaled)
 
 			if window.WaitKey(10) == 27 {
 				break
