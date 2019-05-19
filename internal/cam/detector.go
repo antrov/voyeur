@@ -47,17 +47,15 @@ func NewDetector(mask gocv.Mat) Detector {
 }
 
 // Process for procesing image
-func (d *Detector) Process(imgRaw gocv.Mat, imgDst *gocv.Mat) (bool, []gocv.Mat) {
-	var stages []gocv.Mat
-
+func (d *Detector) Process(imgRaw gocv.Mat, imgDst *gocv.Mat) bool {
 	found := false
 
 	// imgRaw.CopyTo(imgDst)
 
-	gocv.CvtColor(imgRaw, &imgRaw, gocv.ColorRGBToGray)
-	gocv.BitwiseAnd(imgRaw, d.ImgMask, &imgRaw)
+	gocv.CvtColor(imgRaw, &d.ImgBack, gocv.ColorRGBToGray)
+	gocv.BitwiseAnd(d.ImgBack, d.ImgMask, &d.ImgBack)
 
-	d.mog2.Apply(imgRaw, &d.ImgDelta)
+	d.mog2.Apply(d.ImgBack, &d.ImgDelta)
 
 	// remaining cleanup of the image to use for finding contours.
 	// first use threshold
@@ -68,8 +66,8 @@ func (d *Detector) Process(imgRaw gocv.Mat, imgDst *gocv.Mat) (bool, []gocv.Mat)
 	// defer kernel.Close()
 	// gocv.Dilate(d.ImgThresh, &d.ImgThresh, kernel)
 
-	d.ImgDelta.CopyTo(imgDst)
-	gocv.CvtColor(*imgDst, imgDst, gocv.ColorGrayToBGR)
+	// d.ImgDelta.CopyTo(imgDst)!
+	// gocv.CvtColor(*imgDst, imgDst, gocv.ColorGrayToBGR)!
 
 	// now find contours
 	// contours := gocv.FindContours(d.ImgThresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
@@ -92,5 +90,5 @@ func (d *Detector) Process(imgRaw gocv.Mat, imgDst *gocv.Mat) (bool, []gocv.Mat)
 	// break
 	// }
 
-	return found, stages
+	return found
 }

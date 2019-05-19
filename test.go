@@ -40,15 +40,17 @@ func main() {
 	imgRaw := gocv.NewMat()
 	defer imgRaw.Close()
 
-	imgScaled := gocv.NewMat()
-	defer imgScaled.Close()
+	// imgScaled := gocv.NewMat()
+	// defer imgScaled.Close()
+
+	regionRect := image.Rect(29, 156, 859, 634)
 
 	imgMask := gocv.IMRead("test_mask.png", gocv.IMReadGrayScale)
 	if imgMask.Empty() {
 		log.Fatalln("Mask not loaded")
 	}
 	gocv.Resize(imgMask, &imgMask, image.Point{width, height}, 0, 0, 1)
-	imgMask = imgMask.Region(image.Rect(29, 156, 859, 634))
+	imgMask = imgMask.Region(regionRect)
 	// maskArea := maskArea(imgMask)
 
 	detector := cam.NewDetector(imgMask)
@@ -77,7 +79,8 @@ func main() {
 
 		// gocv.Resize(imgRaw, &imgScaled, image.Point{width, height}, 0, 0, 1)
 
-		imgScaled = imgRaw.Region(image.Rect(29, 156, 859, 634))
+		imgScaled := imgRaw.Region(regionRect)
+		defer imgScaled.Close()
 
 		processTime = time.Now()
 		detector.Process(imgScaled, &imgResult)
@@ -91,7 +94,7 @@ func main() {
 		fmt.Printf("\rFPS: %d, process time: %d (current %s) ", fpsSum/framesCnt, processSum/framesCnt, processDuration)
 
 		if window != nil {
-			window.IMShow(imgScaled)
+			window.IMShow(imgRaw)
 
 			if window.WaitKey(10) == 27 {
 				break
