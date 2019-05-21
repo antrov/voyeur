@@ -8,19 +8,60 @@ import (
 	"gocv.io/x/gocv"
 )
 
-func createMask(base, draw gocv.Mat, mask, preview *gocv.Mat) (err error) {
-	if mask == nil {
-		return errors.New("mask var have to be initalized before calling func")
+// ROI manages Region of Interest, allows to load mask from file
+// or to create it from red drawings
+type ROI struct {
+	Mask       gocv.Mat
+	Bounds     image.Rectangle
+	contours   [][]image.Point
+	maskRegion gocv.Mat
+}
+
+// ER is shorthand for empty ROI
+var ER ROI
+
+// NewROI from given file name or []byte
+func NewROI(file string) (ROI, error) {
+	maskMat := gocv.IMRead(file, gocv.IMReadGrayScale)
+
+	if maskMat.Empty() {
+		return ER, errors.New("Loaded mask is empty")
 	}
 
-	back := gocv.NewMatWithSize(draw.Size()[0], draw.Size()[1], gocv.MatTypeCV8UC3)
-	back.CopyTo(mask)
-	back.Close()
+	contours, bounds := contoursAndBounds(maskMat)
+	if len(contours) == 0 {
+		return ER, errors.New("Mask invalid - has no white ares")
+	}
+
+	gocv.CvtColor(maskMat, &maskMat, gocv.ColorGrayToBGR)
+
+	roi := ROI{
+		Mask:       maskMat,
+		Bounds:     bounds,
+		contours:   contours,
+		maskRegion: maskMat.Region(bounds),
+	}
+
+	return roi, nil
+}
+
+// NewROIFromDrawing decodes bytes and processing
+// red drawing to find and create mask
+func NewROIFromDrawing(src []byte) (ROI, error) {
+	maskSrc, err := gocv.IMDecode(src, gocv.IMReadUnchanged)
+	if err != nil {
+		return ER, err
+	}
+	defer maskSrc.Close()
+
+	width := maskSrc.Size()[0]
+	height := maskSrc.Size()[1]
+	mask := gocv.NewMatWithSize(width, height, gocv.MatTypeCV8UC3)
 
 	hsv := gocv.NewMat()
 	defer hsv.Close()
 
-	gocv.CvtColor(draw, &hsv, gocv.ColorBGRToHSV)
+	gocv.CvtColor(maskSrc, &hsv, gocv.ColorBGRToHSV)
 
 	thresh := gocv.NewMat()
 	defer thresh.Close()
@@ -29,50 +70,57 @@ func createMask(base, draw gocv.Mat, mask, preview *gocv.Mat) (err error) {
 	ub := gocv.NewScalar(255, 255, 255, 1)
 
 	gocv.InRangeWithScalar(hsv, lb, ub, &thresh)
-
 	gocv.GaussianBlur(thresh, &thresh, image.Point{11, 11}, 31, 31, gocv.BorderDefault)
 
-	// maskPrev := gocv.NewMatWithSize(base.Size()[0], base.Size()[1], base.Type())
-	// defer maskPrev.Close()
+	contours, bounds := contoursAndBounds(thresh)
+	if len(contours) == 0 {
+		return ER, errors.New("No red areas detected to extract mask")
+	}
 
-	contours := gocv.FindContours(thresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
-	gocv.FillPoly(mask, contours, color.RGBA{255, 255, 255, 1})
-	// gocv.FillPoly(&maskPrev, contours, color.RGBA{255, 255, 255, 1})
+	gocv.FillPoly(&mask, contours, color.RGBA{255, 255, 255, 1})
 
-	roi := gocv.NewMat()
-	defer roi.Close()
+	roi := ROI{
+		Mask:       mask,
+		Bounds:     bounds,
+		contours:   contours,
+		maskRegion: mask.Region(bounds),
+	}
 
-	gocv.BitwiseAnd(base, *mask, &roi)
-	gocv.AddWeighted(base, 0.3, roi, 1, 0, preview)
-
-	return nil
+	return roi, nil
 }
 
-// func main() {
-// 	// window := gocv.NewWindow("Motion Window")
-// 	// window.SetWindowProperty(gocv.WindowPropertyFullscreen, gocv.WindowFullscreen)
-// 	// window.SetWindowProperty(gocv.WindowPropertyFullscreen, gocv.WindowNormal)
-// 	// defer window.Close()
+func contoursAndBounds(mat gocv.Mat) ([][]image.Point, image.Rectangle) {
+	bounds := image.ZR
+	contours := gocv.FindContours(mat, gocv.RetrievalExternal, gocv.ChainApproxSimple)
 
-// 	src := gocv.IMRead("/Users/antrov/Projekty/anti-couchsurfer/roi_src.jpg", gocv.IMReadColor)
-// 	defer src.Close()
+	for _, c := range contours {
+		rect := gocv.BoundingRect(c)
+		bounds = bounds.Union(rect)
+	}
 
-// 	img := gocv.IMRead("/Users/antrov/Projekty/anti-couchsurfer/roi.jpg", gocv.IMReadColor)
-// 	defer img.Close()
+	return contours, bounds
+}
 
-// 	mask := gocv.NewMat()
-// 	defer mask.Close()
+// MaskPreview creates Mat with gray area outside of ROI.
+// Result is not resized to ROI bounds - size is equal to input Mat size
+func (r *ROI) MaskPreview(src gocv.Mat, dst *gocv.Mat) {
+	previewROI := gocv.NewMat()
+	defer previewROI.Close()
 
-// 	preview := gocv.NewMat()
-// 	defer preview.Close()
+	gocv.BitwiseAnd(src, r.Mask, &previewROI)
+	gocv.AddWeighted(src, 0.3, previewROI, 1, 1, dst)
+}
 
-// 	createMask(img, img, &mask, &preview)
+// Apply resizes input Mat to bounds of ROI and applies Mask
+func (r *ROI) Apply(src gocv.Mat, dst *gocv.Mat) {
+	srcRegion := src.Region(r.Bounds)
+	defer srcRegion.Close()
 
-// 	gocv.IMWrite("out.png", preview)
-// 	// window.IMShow(mask)
-// 	// window.IMShow(preview)
+	gocv.BitwiseAnd(r.maskRegion, srcRegion, dst)
+}
 
-// 	// if window.WaitKey(10000) == 27 {
-// 	// 	return
-// 	// }
-// }
+// Close for close unlaying Mats
+func (r *ROI) Close() {
+	r.Mask.Close()
+	r.maskRegion.Close()
+}
