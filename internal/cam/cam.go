@@ -1,7 +1,6 @@
 package cam
 
 import (
-	"fmt"
 	"image"
 	"log"
 	"os"
@@ -57,8 +56,8 @@ func createCaptureFilename(ext string) string {
 }
 
 // StartSession start capture loop. If no commands send, loop is idle
-func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan chan CaptureCommandType) {
-	webcam, err := gocv.OpenVideoCapture(sourceID)
+func StartSession(source interface{}, maskf string, evtChan chan CaptureEvent, cmdChan chan CaptureCommandType) {
+	webcam, err := gocv.OpenVideoCapture(source)
 	if err != nil {
 		return
 	}
@@ -221,10 +220,12 @@ func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan
 
 			gocv.Resize(imgMask, &imgMask, image.Point{width, height}, 0, 0, 1)
 			gocv.CvtColor(imgMask, &previewMask, gocv.ColorGrayToBGR)
-			gocv.BitwiseAnd(imgScaled, previewMask, &previewROI)
-			gocv.AddWeighted(imgScaled, 0.3, previewROI, 1, 1, &preview)
+			gocv.BitwiseAnd(imgRaw, previewMask, &previewROI)
+			gocv.AddWeighted(imgRaw, 0.3, previewROI, 1, 1, &preview)
 			gocv.IMWrite(file, preview)
 
+			imgMask = imgMask.Region(regionRect)
+			log.Println("mask created, sending event")
 			evtChan <- CaptureEvent{
 				Type: EventTypePhotoAvailable,
 				File: file}
@@ -242,12 +243,11 @@ func StartSession(sourceID int, maskf string, evtChan chan CaptureEvent, cmdChan
 			fpsSum += int(time.Second / time.Since(frameTime))
 			processSum += int(processDuration / time.Millisecond)
 
-			fmt.Printf("\rFPS: %d, process time: %d (current %s) ", fpsSum/framesCnt, processSum/framesCnt, processDuration)
+			// fmt.Printf("\rFPS: %d, process time: %d (current %s) ", fpsSum/framesCnt, processSum/framesCnt, processDuration)
 		}
 
 		if writer != nil && writer.IsOpened() {
-			writer.Write(imgScaled)
-			log.Println("writing")
+			writer.Write(imgRaw)
 		}
 
 		frameTime = time.Now()
@@ -269,7 +269,7 @@ func NewMask(buf []byte, file string) error {
 	preview := gocv.NewMat()
 	defer preview.Close()
 
-	createMask(draw, draw, &mask, &preview)
+	// createMask(draw, draw, &mask, &preview)
 
 	gocv.IMWrite(file, mask)
 

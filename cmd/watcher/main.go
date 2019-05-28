@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -29,6 +30,11 @@ const (
 
 func main() {
 	rand.Seed(time.Now().Unix())
+
+	detectFlag := flag.Bool("detection", false, "Enable detection on start")
+	sourceFlag := flag.String("source", "0", "Input source of video:\n\tcamera index - 0 (default -> /dev/video0)\n\tfile - capture.avi\n\ttcp stream - tcp://192.168.1.83:5000")
+
+	flag.Parse()
 
 	err := godotenv.Load()
 	if err != nil {
@@ -81,7 +87,7 @@ func main() {
 
 	maskFile := os.Getenv("MASK_PATH")
 
-	go cam.StartSession(0, maskFile, events, commands)
+	go cam.StartSession(*sourceFlag, maskFile, events, commands)
 
 	for {
 		var msg tgbotapi.Chattable
@@ -103,7 +109,9 @@ func main() {
 
 			switch event.Type {
 			case cam.EventTypeCaptureStarted:
-				commands <- cam.CaptureCommandTypeStartDetection
+				if *detectFlag {
+					commands <- cam.CaptureCommandTypeStartDetection
+				}
 
 			case cam.EventTypePhotoAvailable:
 				msg = tgbotapi.NewPhotoUpload(chatID, event.File)

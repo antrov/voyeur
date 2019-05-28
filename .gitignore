@@ -3,5 +3,9 @@
 // Media files
 *.mp4
 *.avi
-*.png
-*.jpg
+./*.png
+./*.jpg
+*.mkv
+
+// Out
+out
