@@ -8,22 +8,14 @@ import (
 type Detector struct {
 	ImgDelta  gocv.Mat
 	ImgThresh gocv.Mat
-	ImgMask   gocv.Mat
 	mog2      gocv.BackgroundSubtractorKNN
 	ImgBack   gocv.Mat
-}
-
-// UpdateMask sets new mask Mat which be used on next detection
-func (d *Detector) UpdateMask(mask gocv.Mat) {
-	d.ImgMask.Close()
-	d.ImgMask = mask
 }
 
 // Close all gocv.Mats
 func (d *Detector) Close() {
 	d.ImgDelta.Close()
 	d.ImgThresh.Close()
-	d.ImgMask.Close()
 	d.mog2.Close()
 }
 
@@ -36,11 +28,10 @@ func (d *Detector) Clear() {
 }
 
 // NewDetector creates new instance of detector with all Mats initialized
-func NewDetector(mask gocv.Mat) Detector {
+func NewDetector() Detector {
 	return Detector{
 		ImgDelta:  gocv.NewMat(),
 		ImgThresh: gocv.NewMat(),
-		ImgMask:   mask,
 		mog2:      gocv.NewBackgroundSubtractorKNN(),
 		ImgBack:   gocv.NewMat(),
 	}
@@ -52,10 +43,10 @@ func (d *Detector) Process(imgRaw gocv.Mat, imgDst *gocv.Mat) bool {
 
 	// imgRaw.CopyTo(imgDst)
 
-	gocv.CvtColor(imgRaw, &d.ImgBack, gocv.ColorRGBToGray)
-	gocv.BitwiseAnd(d.ImgBack, d.ImgMask, &d.ImgBack)
+	// gocv.CvtColor(imgRaw, &d.ImgBack, gocv.ColorRGBToGray)
+	// gocv.BitwiseAnd(d.ImgBack, d.ImgMask, &d.ImgBack)
 
-	d.mog2.Apply(d.ImgBack, &d.ImgDelta)
+	d.mog2.Apply(imgRaw, &d.ImgDelta)
 
 	// remaining cleanup of the image to use for finding contours.
 	// first use threshold
