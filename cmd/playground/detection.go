@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"image"
 	"log"
 	"time"
 
@@ -13,7 +12,7 @@ import (
 
 func main() {
 	headlessFlag := flag.Bool("headless", false, "show results in window")
-	inputFlag := flag.String("input", "0", "opencv input address")
+	inputFlag := flag.String("input", "0", "opencv input address/file/video index")
 	flag.Parse()
 
 	var window *gocv.Window
@@ -34,26 +33,19 @@ func main() {
 	webcam.Set(gocv.VideoCaptureFrameHeight, 720)
 	defer webcam.Close()
 
-	width := int(webcam.Get(gocv.VideoCaptureFrameWidth))
-	height := int(webcam.Get(gocv.VideoCaptureFrameHeight))
-
 	imgRaw := gocv.NewMat()
 	defer imgRaw.Close()
 
-	// imgScaled := gocv.NewMat()
-	// defer imgScaled.Close()
+	imgResult := gocv.NewMat()
+	defer imgResult.Close()
 
-	regionRect := image.Rect(29, 156, 859, 634)
-
-	imgMask := gocv.IMRead("test_mask.png", gocv.IMReadGrayScale)
-	if imgMask.Empty() {
-		log.Fatalln("Mask not loaded")
+	roi, err := cam.NewROI("resources/testing/test_mask.png")
+	if err != nil {
+		log.Fatal(err)
 	}
-	gocv.Resize(imgMask, &imgMask, image.Point{width, height}, 0, 0, 1)
-	imgMask = imgMask.Region(regionRect)
-	// maskArea := maskArea(imgMask)
+	defer roi.Close()
 
-	detector := cam.NewDetector(imgMask)
+	detector := cam.NewDetector()
 	defer detector.Close()
 
 	frameTime := time.Now()
@@ -62,9 +54,6 @@ func main() {
 	fpsSum := 0
 	processSum := 0
 	framesCnt := 0
-
-	imgResult := gocv.NewMat()
-	defer imgResult.Close()
 
 	for {
 		if ok := webcam.Read(&imgRaw); !ok {
@@ -77,13 +66,10 @@ func main() {
 			continue
 		}
 
-		// gocv.Resize(imgRaw, &imgScaled, image.Point{width, height}, 0, 0, 1)
-
-		imgScaled := imgRaw.Region(regionRect)
-		defer imgScaled.Close()
+		roi.Apply(imgRaw, &imgResult)
 
 		processTime = time.Now()
-		detector.Process(imgScaled, &imgResult)
+		detector.Process(imgResult, &imgResult)
 
 		processDuration := time.Since(processTime)
 
@@ -94,7 +80,7 @@ func main() {
 		fmt.Printf("\rFPS: %d, process time: %d (current %s) ", fpsSum/framesCnt, processSum/framesCnt, processDuration)
 
 		if window != nil {
-			window.IMShow(imgRaw)
+			window.IMShow(imgResult)
 
 			if window.WaitKey(10) == 27 {
 				break
