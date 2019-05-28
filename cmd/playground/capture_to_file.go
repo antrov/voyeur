@@ -12,7 +12,7 @@ import (
 	"gocv.io/x/gocv"
 )
 
-func main() {
+func main2() {
 	width := flag.Float64("width", 960, "width")
 	duration := flag.Int64("duration", 2, "duration of recording. Set 0 to make it infinite")
 	file := flag.String("file", "capture.avi", "path to output capture file")
