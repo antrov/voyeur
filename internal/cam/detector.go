@@ -135,8 +135,8 @@ func (d *DetectorDiff) Process(src gocv.Mat, dst *gocv.Mat) bool {
 	gocv.CvtColor(d.diff, &d.grayImg, gocv.ColorBGRToGray)
 	gocv.Threshold(d.grayImg, &d.grayImg, 10, 255, gocv.ThresholdBinary)
 
-	gocv.Dilate(d.grayImg, &d.grayImg, gocv.NewMat())
-	gocv.Erode(d.grayImg, &d.grayImg, gocv.NewMat())
+	gocv.Dilate(d.grayImg, &d.grayImg, EM)
+	gocv.Erode(d.grayImg, &d.grayImg, EM)
 
 	d.grayImg.CopyTo(dst)
 
