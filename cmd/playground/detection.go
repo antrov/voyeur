@@ -120,6 +120,9 @@ func main() {
 		go detector.Process(p1, &p1)
 		go detector2.Process(p2, &p2)
 
+		<-detectorDiff.C
+		<-detectorDiff2.C
+
 		processDuration := time.Since(processTime)
 
 		framesCnt++

@@ -103,6 +103,7 @@ type DetectorDiff struct {
 	movingAvg gocv.Mat
 	diff      gocv.Mat
 	temp      gocv.Mat
+	C         chan interface{}
 }
 
 // NewDetectorDiff creates new instance DetectorDiff
@@ -112,6 +113,7 @@ func NewDetectorDiff() DetectorDiff {
 		movingAvg: gocv.NewMat(),
 		diff:      gocv.NewMat(),
 		temp:      gocv.NewMat(),
+		C:         make(chan interface{}),
 	}
 }
 
@@ -139,6 +141,8 @@ func (d *DetectorDiff) Process(src gocv.Mat, dst *gocv.Mat) bool {
 	gocv.Erode(d.grayImg, &d.grayImg, EM)
 
 	d.grayImg.CopyTo(dst)
+
+	d.C <- ""
 
 	// contours := gocv.FindContours(d.grayImg, gocv.RetrievalExternal, gocv.ChainApproxSimple)
 	// for i, c := range contours {
