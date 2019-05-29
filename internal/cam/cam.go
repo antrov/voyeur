@@ -80,7 +80,7 @@ func StartSession(source interface{}, maskf string, evtChan chan CaptureEvent, c
 	}
 	imgMask = imgMask.Region(regionRect)
 
-	detector := NewDetector()
+	detector := NewDetectorDiff()
 	defer detector.Close()
 
 	// recording vars
@@ -129,7 +129,7 @@ func StartSession(source interface{}, maskf string, evtChan chan CaptureEvent, c
 			case CaptureCommandTypeStopDetection:
 				log.Println("Stop detection")
 				detectionEnabled = false
-				detector.Clear()
+				detector.Reset()
 
 			case CaptureCommandTypePreviewROI:
 				previewROI = true

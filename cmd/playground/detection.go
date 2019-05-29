@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"gitlab.com/antrov/couch-watch/internal/cam"
+	"gitlab.com/antrov/voyeur/internal/cam"
 	"gocv.io/x/gocv"
 )
 
@@ -45,7 +45,9 @@ func main() {
 	}
 	defer roi.Close()
 
-	detector := cam.NewDetector()
+	detectorDiff := cam.NewDetectorDiff()
+
+	var detector cam.Detector = &detectorDiff
 	defer detector.Close()
 
 	frameTime := time.Now()
