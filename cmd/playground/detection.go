@@ -57,38 +57,43 @@ func main() {
 	processSum := 0
 	framesCnt := 0
 
-	for {
-		if ok := webcam.Read(&imgRaw); !ok {
-			log.Println("Reading frame from camera is not ok. Breaking")
-			break
-		}
-
-		if imgRaw.Empty() {
-			log.Println("Captured frame is empty")
-			continue
-		}
-
-		roi.Apply(imgRaw, &imgResult)
-
-		processTime = time.Now()
-		detector.Process(imgResult, &imgResult)
-
-		processDuration := time.Since(processTime)
-
-		framesCnt++
-		fpsSum += int(time.Second / time.Since(frameTime))
-		processSum += int(processDuration / time.Millisecond)
-
-		fmt.Printf("\rFPS: %d, process time: %d (current %s) ", fpsSum/framesCnt, processSum/framesCnt, processDuration)
-
-		if window != nil {
-			window.IMShow(imgResult)
-
-			if window.WaitKey(10) == 27 {
+	blockingChahn := make(chan interface{})
+	go func() {
+		for {
+			if ok := webcam.Read(&imgRaw); !ok {
+				log.Println("Reading frame from camera is not ok. Breaking")
 				break
 			}
-		}
 
-		frameTime = time.Now()
-	}
+			if imgRaw.Empty() {
+				log.Println("Captured frame is empty")
+				continue
+			}
+
+			roi.Apply(imgRaw, &imgResult)
+
+			processTime = time.Now()
+			detector.Process(imgResult, &imgResult)
+
+			processDuration := time.Since(processTime)
+
+			framesCnt++
+			fpsSum += int(time.Second / time.Since(frameTime))
+			processSum += int(processDuration / time.Millisecond)
+
+			fmt.Printf("\rFPS: %d, process time: %d (current %s) ", fpsSum/framesCnt, processSum/framesCnt, processDuration)
+
+			if window != nil {
+				window.IMShow(imgResult)
+
+				if window.WaitKey(10) == 27 {
+					break
+				}
+			}
+
+			frameTime = time.Now()
+		}
+	}()
+
+	<-blockingChahn
 }
