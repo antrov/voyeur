@@ -85,6 +85,11 @@ func main() {
 	var detector cam.Detector = &detectorDiff
 	defer detector.Close()
 
+	detectorDiff2 := cam.NewDetectorDiff()
+
+	var detector2 cam.Detector = &detectorDiff2
+	defer detector2.Close()
+
 	frameTime := time.Now()
 	processTime := time.Now()
 
@@ -106,7 +111,14 @@ func main() {
 		roi.Apply(imgRaw, &imgResult)
 
 		processTime = time.Now()
-		detector.Process(imgResult, &imgResult)
+		r := image.Rect(0, 0, roi.Bounds.Size().X/2, roi.Bounds.Size().Y)
+		r2 := image.Rect(roi.Bounds.Size().X/2, 0, roi.Bounds.Size().X, roi.Bounds.Size().Y)
+
+		p1 := imgResult.Region(r)
+		p2 := imgResult.Region(r2)
+
+		go detector.Process(p1, &p1)
+		go detector2.Process(p2, &p2)
 
 		processDuration := time.Since(processTime)
 
