@@ -123,6 +123,9 @@ func main() {
 		<-detectorDiff.C
 		<-detectorDiff2.C
 
+		p1.Close()
+		p2.Close()
+
 		processDuration := time.Since(processTime)
 
 		framesCnt++

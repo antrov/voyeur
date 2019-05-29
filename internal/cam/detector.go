@@ -119,16 +119,15 @@ func NewDetectorDiff() DetectorDiff {
 
 // Process for procesing image
 func (d *DetectorDiff) Process(src gocv.Mat, dst *gocv.Mat) bool {
-	gocv.Blur(src, &src, image.Point{3, 3})
+	gocv.Blur(src, &d.temp, image.Point{3, 3})
 
 	if d.diff.Empty() {
 		src.CopyTo(&d.diff)
-		src.CopyTo(&d.temp)
 		gocv.ConvertScaleAbs(src, &d.movingAvg, 1, 1)
 	} else {
 		// Speed of change - higher value - higher sensitivity for small changes
 		a := 0.2
-		gocv.AddWeighted(src, 1-a, d.movingAvg, a, 0, &d.movingAvg)
+		gocv.AddWeighted(d.temp, 1-a, d.movingAvg, a, 0, &d.movingAvg)
 	}
 
 	gocv.ConvertScaleAbs(d.movingAvg, &d.temp, 1, 0)
