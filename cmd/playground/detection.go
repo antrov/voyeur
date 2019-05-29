@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"image"
 	"log"
 	"os"
 	"os/signal"
@@ -18,6 +19,7 @@ var (
 	headlessFlag = flag.Bool("headless", false, "show results in window")
 	inputFlag    = flag.String("input", "0", "opencv input address/file/video index")
 	cpuprofile   = flag.String("cpuprofile", "", "write cpu profile to `file`")
+	width        = flag.Float64("width", 960, "width")
 )
 
 func main() {
@@ -53,16 +55,18 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// webcam, err := gocv.OpenVideoCapture("udp://0.0.0.0:5000")
-	// webcam, err := gocv.OpenVideoCapture("tcp://192.168.1.83:5000")
 	webcam, err := gocv.OpenVideoCapture(*inputFlag)
 	if err != nil {
 		return
 	}
 
-	webcam.Set(gocv.VideoCaptureFrameWidth, 960)
-	webcam.Set(gocv.VideoCaptureFrameHeight, 720)
+	webcam.Set(gocv.VideoCaptureFrameWidth, *width)
+	webcam.Set(gocv.VideoCaptureFrameHeight, float64(int(*width*0.75)))
 	defer webcam.Close()
+
+	w := int(webcam.Get(gocv.VideoCaptureFrameWidth))
+	h := int(webcam.Get(gocv.VideoCaptureFrameHeight))
+	s := image.Point{w, h}
 
 	imgRaw := gocv.NewMat()
 	defer imgRaw.Close()
@@ -70,7 +74,7 @@ func main() {
 	imgResult := gocv.NewMat()
 	defer imgResult.Close()
 
-	roi, err := cam.NewROI("resources/testing/test_mask.png")
+	roi, err := cam.NewROI("resources/testing/test_mask.png", s)
 	if err != nil {
 		log.Fatal(err)
 	}

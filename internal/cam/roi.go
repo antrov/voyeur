@@ -20,12 +20,19 @@ type ROI struct {
 // ER is shorthand for empty ROI
 var ER ROI
 
+// Shorthand for zero point
+var EP image.Point
+
 // NewROI from given file name or []byte
-func NewROI(file string) (ROI, error) {
+func NewROI(file string, size image.Point) (ROI, error) {
 	maskMat := gocv.IMRead(file, gocv.IMReadGrayScale)
 
 	if maskMat.Empty() {
 		return ER, errors.New("Loaded mask is empty")
+	}
+
+	if !size.Eq(EP) {
+		gocv.Resize(maskMat, &maskMat, size, 0, 0, gocv.InterpolationDefault)
 	}
 
 	contours, bounds := contoursAndBounds(maskMat)
