@@ -12,10 +12,14 @@ import (
 	"gocv.io/x/gocv"
 )
 
-func main2() {
-	width := flag.Float64("width", 960, "width")
-	duration := flag.Int64("duration", 2, "duration of recording. Set 0 to make it infinite")
-	file := flag.String("file", "capture.avi", "path to output capture file")
+var (
+	width    = flag.Float64("width", 960, "width")
+	duration = flag.Int64("duration", 2, "duration of recording. Set 0 to make it infinite")
+	file     = flag.String("file", "capture.mkv", "path to output capture file")
+	codec    = flag.String("codec", "h264", "Codec used to encode video (h264, png, jpeg)")
+)
+
+func main() {
 
 	flag.Parse()
 	height := int(*width * 0.75)
@@ -92,7 +96,7 @@ func main2() {
 		frameTime = time.Now()
 	}
 
-	writer, _ := gocv.VideoWriterFile(*file, "h264", f, w, h, true)
+	writer, _ := gocv.VideoWriterFile(*file, *codec, f, w, h, true)
 
 	for i, img := range buffer {
 		if i >= frameIdx {
