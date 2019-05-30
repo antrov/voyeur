@@ -17,6 +17,7 @@ var (
 	duration = flag.Int64("duration", 2, "duration of recording. Set 0 to make it infinite")
 	file     = flag.String("file", "capture.mkv", "path to output capture file")
 	codec    = flag.String("codec", "h264", "Codec used to encode video (h264, png, jpeg)")
+	inMemory = flag.Bool("in-memory", false, "write to memory to increase FPS on slower devices")
 )
 
 func main() {
@@ -42,7 +43,13 @@ func main() {
 	fmt.Printf("size is: %d x %d, FPS %f\n\r", w, h, f)
 
 	bufLen := int(f) * int(*duration)
-	buffer := make([]gocv.Mat, bufLen)
+	var buffer []gocv.Mat
+
+	writer, _ := gocv.VideoWriterFile(*file, *codec, f, w, h, true)
+
+	if *inMemory {
+		buffer = make([]gocv.Mat, bufLen)
+	}
 
 	frameTime := time.Now()
 	frameIdx := 0
@@ -86,8 +93,14 @@ func main() {
 
 		gocv.PutText(&imgRaw, strconv.Itoa(frameIdx), framePos, gocv.FontHersheyPlain, frameSize, frameColor, 3)
 
-		if frameIdx < bufLen {
-			buffer[frameIdx] = imgRaw.Clone()
+		switch *inMemory {
+		case true:
+			if frameIdx < bufLen {
+				buffer[frameIdx] = imgRaw.Clone()
+			}
+
+		case false:
+			writer.Write(imgRaw)
 		}
 
 		fmt.Printf("\rFPS: %d\tframe %d\t", int(time.Second/time.Since(frameTime)), frameIdx)
@@ -96,14 +109,18 @@ func main() {
 		frameTime = time.Now()
 	}
 
-	writer, _ := gocv.VideoWriterFile(*file, *codec, f, w, h, true)
+	fmt.Println()
 
-	for i, img := range buffer {
-		if i >= frameIdx {
-			break
+	if *inMemory {
+		fmt.Println("Writing to file")
+
+		for i, img := range buffer {
+			if i >= frameIdx {
+				break
+			}
+
+			writer.Write(img)
 		}
-
-		writer.Write(img)
 	}
 
 	writer.Close()
